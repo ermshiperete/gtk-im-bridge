@@ -7,6 +7,7 @@ interactions.
 ## Quick start
 
 ### Requirements
+
 - meson, ninja
 - `gtk4` development packages
 - `ibus-1.0` development packages
@@ -56,12 +57,14 @@ All function entry/exit and signal forwarding are logged to:
 ```
 
 ## Files added
+
 - `meson.build`, `meson_options.build`
 - `src/` — implementation and logging
 - `tests/test_runtime.c` — small dynamic loader test
 - `PLAN.md` — short implementation plan
 
 ## Next steps
+
 - Install the module and test in real applications, or I can commit and install it for you.
 
 ## License
