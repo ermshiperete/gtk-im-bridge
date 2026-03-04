@@ -9,7 +9,12 @@ gio_dep = dependency('gio-2.0', version: '>=2.56')
 
 # Get GTK module directory (install into GTK's versioned modules path)
 # e.g. /usr/lib/x86_64-linux-gnu/gtk-4.0/4.0.0/immodules
-gtk_libdir = join_paths(get_option('libdir'), 'gtk-4.0', '4.0.0', 'immodules')
+gtk_libdir_opt = get_option('gtk_libdir')
+if gtk_libdir_opt != ''
+  gtk_libdir = gtk_libdir_opt
+else
+  gtk_libdir = join_paths(get_option('libdir'), 'gtk-4.0', '4.0.0', 'immodules')
+endif
 
 # Source files
 sources = [
