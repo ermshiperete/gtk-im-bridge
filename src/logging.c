@@ -12,15 +12,15 @@ static void
 logging_ensure_open(void)
 {
   if (log_file == NULL)
+  {
+    log_file = fopen(log_file_path, "a");
+    if (log_file == NULL)
     {
-      log_file = fopen(log_file_path, "a");
-      if (log_file == NULL)
-        {
-          g_warning("Failed to open log file %s", log_file_path);
-          return;
-        }
-      setvbuf(log_file, NULL, _IOLBF, 0); /* Line buffered */
+      g_warning("Failed to open log file %s", log_file_path);
+      return;
     }
+    setvbuf(log_file, NULL, _IOLBF, 0); /* Line buffered */
+  }
 }
 
 static char *
@@ -33,99 +33,111 @@ get_timestamp(void)
   return timestamp;
 }
 
-void
-logging_init(void)
+void logging_init(void)
 {
   logging_ensure_open();
+  printf("\n========================================\n");
+  printf("GTK-IM-Bridge initialized at %s\n", get_timestamp());
+  printf("========================================\n");
   if (log_file)
-    {
-      fprintf(log_file, "\n========================================\n");
-      fprintf(log_file, "GTK-IM-Bridge initialized at %s\n", get_timestamp());
-      fprintf(log_file, "========================================\n");
-      fflush(log_file);
-    }
+  {
+    fprintf(log_file, "\n========================================\n");
+    fprintf(log_file, "GTK-IM-Bridge initialized at %s\n", get_timestamp());
+    fprintf(log_file, "========================================\n");
+    fflush(log_file);
+  }
 }
 
-void
-logging_function_enter(const char *function_name, const char *params_format, ...)
+void logging_function_enter(const char *function_name, const char *params_format, ...)
 {
   logging_ensure_open();
   if (log_file)
-    {
-      va_list args;
-      fprintf(log_file, "[%s] >> %s(", get_timestamp(), function_name);
-      
-      if (params_format && strlen(params_format) > 0)
-        {
-          va_start(args, params_format);
-          vfprintf(log_file, params_format, args);
-          va_end(args);
-        }
-      
-      fprintf(log_file, ")\n");
-      fflush(log_file);
-    }
-}
+  {
+    va_list args;
+    fprintf(log_file, "[%s] >> %s(", get_timestamp(), function_name);
+    printf("[%s] >> %s(", get_timestamp(), function_name);
 
-void
-logging_function_exit(const char *function_name, const char *result_format, ...)
-{
-  logging_ensure_open();
-  if (log_file)
+    if (params_format && strlen(params_format) > 0)
     {
-      va_list args;
-      fprintf(log_file, "[%s] << %s returns: ", get_timestamp(), function_name);
-      
-      if (result_format && strlen(result_format) > 0)
-        {
-          va_start(args, result_format);
-          vfprintf(log_file, result_format, args);
-          va_end(args);
-        }
-      else
-        {
-          fprintf(log_file, "(void)");
-        }
-      
-      fprintf(log_file, "\n");
-      fflush(log_file);
-    }
-}
-
-void
-logging_signal(const char *signal_name, const char *details_format, ...)
-{
-  logging_ensure_open();
-  if (log_file)
-    {
-      va_list args;
-      fprintf(log_file, "[%s] SIGNAL: %s", get_timestamp(), signal_name);
-      
-      if (details_format && strlen(details_format) > 0)
-        {
-          fprintf(log_file, " | ");
-          va_start(args, details_format);
-          vfprintf(log_file, details_format, args);
-          va_end(args);
-        }
-      
-      fprintf(log_file, "\n");
-      fflush(log_file);
-    }
-}
-
-void
-logging_error(const char *format, ...)
-{
-  logging_ensure_open();
-  if (log_file)
-    {
-      va_list args;
-      fprintf(log_file, "[%s] ERROR: ", get_timestamp());
-      va_start(args, format);
-      vfprintf(log_file, format, args);
+      va_start(args, params_format);
+      vfprintf(log_file, params_format, args);
+      vprintf(params_format, args);
       va_end(args);
-      fprintf(log_file, "\n");
-      fflush(log_file);
     }
+
+    fprintf(log_file, ")\n");
+    printf(")\n");
+    fflush(log_file);
+  }
+}
+
+void logging_function_exit(const char *function_name, const char *result_format, ...)
+{
+  logging_ensure_open();
+  if (log_file)
+  {
+    va_list args;
+    fprintf(log_file, "[%s] << %s returns: ", get_timestamp(), function_name);
+    printf("[%s] << %s returns: ", get_timestamp(), function_name);
+
+    if (result_format && strlen(result_format) > 0)
+    {
+      va_start(args, result_format);
+      vfprintf(log_file, result_format, args);
+      vprintf(result_format, args);
+      va_end(args);
+    }
+    else
+    {
+      fprintf(log_file, "(void)");
+      printf("(void)");
+    }
+
+    fprintf(log_file, "\n");
+    printf("\n");
+    fflush(log_file);
+  }
+}
+
+void logging_signal(const char *signal_name, const char *details_format, ...)
+{
+  logging_ensure_open();
+  if (log_file)
+  {
+    va_list args;
+    fprintf(log_file, "[%s] SIGNAL: %s", get_timestamp(), signal_name);
+    printf("[%s] SIGNAL: %s", get_timestamp(), signal_name);
+
+    if (details_format && strlen(details_format) > 0)
+    {
+      fprintf(log_file, " | ");
+      printf(" | ");
+      va_start(args, details_format);
+      vfprintf(log_file, details_format, args);
+      vprintf(details_format, args);
+      va_end(args);
+    }
+
+    fprintf(log_file, "\n");
+    printf("\n");
+    fflush(log_file);
+  }
+}
+
+void logging_error(const char *format, ...)
+{
+  logging_ensure_open();
+  if (log_file)
+  {
+    va_list args;
+    fprintf(log_file, "[%s] ERROR: ", get_timestamp());
+    printf("[%s] ERROR: ", get_timestamp());
+    va_start(args, format);
+    vfprintf(log_file, format, args);
+    vprintf(format, args);
+    va_end(args);
+    fprintf(log_file, "\n");
+    printf("\n");
+    fflush(log_file);
+  }
 }

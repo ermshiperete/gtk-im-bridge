@@ -35,7 +35,7 @@ Install the module system-wide (may require sudo):
 ```bash
 meson install -C builddir
 # or copy manually:
-# sudo cp builddir/libim-bridge.so /usr/lib/gtk-4.0/immodules/
+# sudo cp builddir/libim-bridge.so /usr/lib/x86_64-linux-gnu/gtk-4.0/4.0.0/immodules/
 ```
 
 ## Usage
