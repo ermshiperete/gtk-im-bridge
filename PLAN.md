@@ -1,12 +1,23 @@
-**GTK-IM-Bridge — Implementation Plan**
+```markdown
+# GTK-IM-Bridge — Implementation Plan
 
-- **Purpose**: Implement a GTK input module (`gtk-im-module`) that bridges GTK's `GtkIMContext` to IBus and logs every implemented function call (name, parameters, return values) to `/tmp/gtk-im-bridge.log`. This is intended as a debugging tool to inspect GTK↔IBus interactions.
+### Purpose
 
-- **Language**: C
-- **Build system**: Meson (project already configured)
-- **Target platform**: Ubuntu 24.04 (GTK4 + IBus available)
+Implement a GTK input module (`gtk-im-module`) that bridges GTK's `GtkIMContext` to IBus and logs every implemented function call (name, parameters, return values) to `/tmp/gtk-im-bridge.log`. This is intended as a debugging tool to inspect GTK↔IBus interactions.
 
-**Work breakdown**
+### Language
+
+C
+
+### Build system
+
+Meson (project already configured)
+
+### Target platform
+
+Ubuntu 24.04 (GTK4 + IBus available)
+
+## Work breakdown
 
 1. Project scaffolding
    - Meson files and options
@@ -26,18 +37,18 @@
 7. Iteration
    - Expand logging detail, convert IBus attributes to Pango attributes if needed
 
-**Files added so far**
+## Files added so far
 - `meson.build`, `meson_options.build`
 - `src/logging.h`, `src/logging.c`
 - `src/ibus-setup.h`, `src/ibus-setup.c`
 - `src/im-bridge.h`, `src/im-bridge.c`
 - `src/module.c`
 
-**Current status**
+## Current status
 - Implemented the core bridge and logging.
 - Project builds successfully; shared library produced at `builddir/libim-bridge.so`.
 
-**Build / Install / Test**
+## Build / Install / Test
 
 To build (already done during implementation):
 
@@ -68,7 +79,7 @@ Check logs at:
 /tmp/gtk-im-bridge.log
 ```
 
-**Next steps**
+## Next steps
 - (Optional) Improve attribute translation from IBus attributes to Pango attributes for accurate preedit rendering.
 - Add unit/integration tests or a small GTK test app that demonstrates preedit and commit flows.
 - Optionally add Meson `install_data` to install a `gtk-query-immodules` metadata file if needed by the platform.
@@ -77,3 +88,5 @@ If you want, I can now:
 - Install the module to the system GTK IM modules directory, or
 - Run a short runtime test with `gtk4-demo` and capture the first log entries, or
 - Implement conversion of IBus attributes to Pango attributes.
+
+```
