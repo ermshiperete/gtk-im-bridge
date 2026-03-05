@@ -1,0 +1,1 @@
+option('gtk_libdir', type: 'string', value: '', description: 'GTK module installation directory')
