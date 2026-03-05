@@ -6,6 +6,7 @@ ibus_dep = dependency('ibus-1.0', version: '>=1.5')
 glib_dep = dependency('glib-2.0', version: '>=2.56')
 gobject_dep = dependency('gobject-2.0', version: '>=2.56')
 gio_dep = dependency('gio-2.0', version: '>=2.56')
+gmodule_dep = dependency('gmodule-2.0', version: '>=2.56')
 
 # Get GTK module directory (install into GTK's versioned modules path)
 # e.g. /usr/lib/x86_64-linux-gnu/gtk-4.0/4.0.0/immodules
@@ -42,5 +43,23 @@ im_module = shared_library(
     '-Wall',
     '-Wextra',
     '-Wno-unused-parameter',
+  ],
+)
+
+# Build test executable (without module.c to avoid GIO module loading)
+test_runtime = executable(
+  'test_runtime',
+  'tests/test_runtime.c',
+  'src/im-bridge.c',
+  'src/logging.c',
+  'src/ibus-setup.c',
+  dependencies: [gtk_dep, ibus_dep, glib_dep, gobject_dep, gio_dep],
+  include_directories: include_directories('src'),
+  c_args: [
+    '-g',
+    '-Wall',
+    '-Wextra',
+    '-Wno-unused-parameter',
+    '-D_BUILD_TEST',
   ],
 )
