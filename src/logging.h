@@ -28,6 +28,8 @@ void logging_signal(const char *signal_name, const char *details_format, ...);
  */
 void logging_error(const char *format, ...);
 
+void logging_message(const char *format, ...);
+
 #define LOG_ENTER(func, fmt, ...) \
   logging_function_enter(func, fmt, ##__VA_ARGS__)
 
@@ -39,5 +41,8 @@ void logging_error(const char *format, ...);
 
 #define LOG_ERROR(fmt, ...) \
   logging_error(fmt, ##__VA_ARGS__)
+
+#define LOG_MESSAGE(fmt, ...) \
+  logging_message(fmt, ##__VA_ARGS__)
 
 #endif // __LOGGING_H__

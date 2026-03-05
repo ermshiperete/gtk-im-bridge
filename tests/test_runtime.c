@@ -10,10 +10,16 @@ int main(int argc, char **argv)
 {
     gtk_init();
 
-    const char *module_path = "../builddir/libim-bridge.so";
+    const char *module_path = getenv("GTK_IM_MODULE_PATH");
+    if (!module_path) {
+        module_path = "../builddir/libim-bridge.so";
+    }
+
+    g_print("Using module path: %s\n", module_path);
+
     GModule *mod = g_module_open(module_path, G_MODULE_BIND_LAZY);
     if (!mod) {
-        g_printerr("Failed to open module: %s\n", g_module_error());
+        g_printerr("Failed to open module '%s': %s\n", module_path, g_module_error());
         return 1;
     }
 

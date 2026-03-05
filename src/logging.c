@@ -60,8 +60,11 @@ void logging_function_enter(const char *function_name, const char *params_format
     if (params_format && strlen(params_format) > 0)
     {
       va_start(args, params_format);
+      va_list args_copy;
+      va_copy(args_copy, args);
       vfprintf(log_file, params_format, args);
-      vprintf(params_format, args);
+      vprintf(params_format, args_copy);
+      va_end(args_copy);
       va_end(args);
     }
 
@@ -83,8 +86,11 @@ void logging_function_exit(const char *function_name, const char *result_format,
     if (result_format && strlen(result_format) > 0)
     {
       va_start(args, result_format);
+      va_list args_copy;
+      va_copy(args_copy, args);
       vfprintf(log_file, result_format, args);
-      vprintf(result_format, args);
+      vprintf(result_format, args_copy);
+      va_end(args_copy);
       va_end(args);
     }
     else
@@ -113,8 +119,11 @@ void logging_signal(const char *signal_name, const char *details_format, ...)
       fprintf(log_file, " | ");
       printf(" | ");
       va_start(args, details_format);
+      va_list args_copy;
+      va_copy(args_copy, args);
       vfprintf(log_file, details_format, args);
-      vprintf(details_format, args);
+      vprintf(details_format, args_copy);
+      va_end(args_copy);
       va_end(args);
     }
 
@@ -133,8 +142,32 @@ void logging_error(const char *format, ...)
     fprintf(log_file, "[%s] ERROR: ", get_timestamp());
     printf("[%s] ERROR: ", get_timestamp());
     va_start(args, format);
+    va_list args_copy;
+    va_copy(args_copy, args);
     vfprintf(log_file, format, args);
-    vprintf(format, args);
+    vprintf(format, args_copy);
+    va_end(args_copy);
+    va_end(args);
+    fprintf(log_file, "\n");
+    printf("\n");
+    fflush(log_file);
+  }
+}
+
+void logging_message(const char *format, ...)
+{
+  logging_ensure_open();
+  if (log_file)
+  {
+    va_list args;
+    fprintf(log_file, "[%s] ", get_timestamp());
+    printf("[%s] ", get_timestamp());
+    va_start(args, format);
+    va_list args_copy;
+    va_copy(args_copy, args);
+    vfprintf(log_file, format, args);
+    vprintf(format, args_copy);
+    va_end(args_copy);
     va_end(args);
     fprintf(log_file, "\n");
     printf("\n");
