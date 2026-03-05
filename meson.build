@@ -38,6 +38,7 @@ im_module = shared_library(
   install: true,
   install_dir: gtk_libdir,
   c_args: [
+    '-g',
     '-Wall',
     '-Wextra',
     '-Wno-unused-parameter',
