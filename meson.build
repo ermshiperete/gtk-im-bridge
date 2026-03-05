@@ -8,6 +8,9 @@ gobject_dep = dependency('gobject-2.0', version: '>=2.56')
 gio_dep = dependency('gio-2.0', version: '>=2.56')
 gmodule_dep = dependency('gmodule-2.0', version: '>=2.56')
 
+# Subdirectories
+subdir('simple-app')
+
 # Get GTK module directory (install into GTK's versioned modules path)
 # e.g. /usr/lib/x86_64-linux-gnu/gtk-4.0/4.0.0/immodules
 gtk_libdir_opt = get_option('gtk_libdir')
