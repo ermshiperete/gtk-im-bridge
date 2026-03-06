@@ -2,8 +2,47 @@
 #include "logging.h"
 #include "ibus-setup.h"
 #include <ibus.h>
+#include <dlfcn.h>
 
 typedef struct _GtkImBridgeContextPrivate GtkImBridgeContextPrivate;
+
+/* libim-ibus function pointers */
+static void *libim_ibus_handle = NULL;
+
+typedef IBusInputContext * (*ibus_setup_get_context_t)(void);
+typedef void (*ibus_setup_cleanup_t)(void);
+typedef gboolean (*ibus_input_context_process_key_event_t)(IBusInputContext *context,
+                                                         guint keyval,
+                                                         guint keycode,
+                                                         guint state);
+typedef void (*ibus_input_context_focus_in_t)(IBusInputContext *context);
+typedef void (*ibus_input_context_focus_out_t)(IBusInputContext *context);
+typedef void (*ibus_input_context_reset_t)(IBusInputContext *context);
+typedef void (*ibus_input_context_set_cursor_location_t)(IBusInputContext *context,
+                                                       gint x,
+                                                       gint y,
+                                                       gint width,
+                                                       gint height);
+typedef void (*ibus_input_context_set_use_preedit_t)(IBusInputContext *context,
+                                                    gboolean use_preedit);
+typedef void (*ibus_input_context_set_surrounding_text_t)(IBusInputContext *context,
+                                                        IBusText *text,
+                                                        guint cursor_pos,
+                                                        guint anchor_pos);
+typedef void (*ibus_input_context_set_capabilities_t)(IBusInputContext *context,
+                                                     guint caps);
+
+/* Function pointers */
+static ibus_setup_get_context_t p_ibus_setup_get_context = NULL;
+static ibus_setup_cleanup_t p_ibus_setup_cleanup = NULL;
+static ibus_input_context_process_key_event_t p_ibus_input_context_process_key_event = NULL;
+static ibus_input_context_focus_in_t p_ibus_input_context_focus_in = NULL;
+static ibus_input_context_focus_out_t p_ibus_input_context_focus_out = NULL;
+static ibus_input_context_reset_t p_ibus_input_context_reset = NULL;
+static ibus_input_context_set_cursor_location_t p_ibus_input_context_set_cursor_location = NULL;
+static ibus_input_context_set_use_preedit_t p_ibus_input_context_set_use_preedit = NULL;
+static ibus_input_context_set_surrounding_text_t p_ibus_input_context_set_surrounding_text = NULL;
+static ibus_input_context_set_capabilities_t p_ibus_input_context_set_capabilities = NULL;
 
 int COUNTER = 0;
 struct _GtkImBridgeContextPrivate
@@ -23,8 +62,72 @@ struct _GtkImBridgeContext
 };
 
 G_DEFINE_FINAL_TYPE_WITH_PRIVATE(GtkImBridgeContext,
-                                  gtk_im_bridge_context,
-                                  GTK_TYPE_IM_CONTEXT)
+                                   gtk_im_bridge_context,
+                                   GTK_TYPE_IM_CONTEXT)
+
+/* ==============================================
+   Dynamic library loading
+   ============================================== */
+
+static gboolean
+load_libim_ibus(void)
+{
+  if (libim_ibus_handle != NULL)
+    return TRUE;
+
+  libim_ibus_handle = dlopen("libim-ibus.so", RTLD_LAZY | RTLD_GLOBAL);
+  if (libim_ibus_handle == NULL)
+    {
+      LOG_MESSAGE("Failed to load libim-ibus.so: %s", dlerror());
+      return FALSE;
+    }
+
+  p_ibus_setup_get_context = dlsym(libim_ibus_handle, "ibus_setup_get_context");
+  p_ibus_setup_cleanup = dlsym(libim_ibus_handle, "ibus_setup_cleanup");
+  p_ibus_input_context_process_key_event = dlsym(libim_ibus_handle, "ibus_input_context_process_key_event");
+  p_ibus_input_context_focus_in = dlsym(libim_ibus_handle, "ibus_input_context_focus_in");
+  p_ibus_input_context_focus_out = dlsym(libim_ibus_handle, "ibus_input_context_focus_out");
+  p_ibus_input_context_reset = dlsym(libim_ibus_handle, "ibus_input_context_reset");
+  p_ibus_input_context_set_cursor_location = dlsym(libim_ibus_handle, "ibus_input_context_set_cursor_location");
+  p_ibus_input_context_set_use_preedit = dlsym(libim_ibus_handle, "ibus_input_context_set_use_preedit");
+  p_ibus_input_context_set_surrounding_text = dlsym(libim_ibus_handle, "ibus_input_context_set_surrounding_text");
+  p_ibus_input_context_set_capabilities = dlsym(libim_ibus_handle, "ibus_input_context_set_capabilities");
+
+  if (!p_ibus_setup_get_context || !p_ibus_setup_cleanup ||
+      !p_ibus_input_context_process_key_event || !p_ibus_input_context_focus_in ||
+      !p_ibus_input_context_focus_out || !p_ibus_input_context_reset ||
+      !p_ibus_input_context_set_cursor_location || !p_ibus_input_context_set_use_preedit ||
+      !p_ibus_input_context_set_surrounding_text || !p_ibus_input_context_set_capabilities)
+    {
+      LOG_MESSAGE("Failed to load required functions from libim-ibus.so");
+      dlclose(libim_ibus_handle);
+      libim_ibus_handle = NULL;
+      return FALSE;
+    }
+
+  LOG_MESSAGE("Successfully loaded libim-ibus.so");
+  return TRUE;
+}
+
+void
+unload_libim_ibus(void)
+{
+  if (libim_ibus_handle != NULL)
+    {
+      dlclose(libim_ibus_handle);
+      libim_ibus_handle = NULL;
+      p_ibus_setup_get_context = NULL;
+      p_ibus_setup_cleanup = NULL;
+      p_ibus_input_context_process_key_event = NULL;
+      p_ibus_input_context_focus_in = NULL;
+      p_ibus_input_context_focus_out = NULL;
+      p_ibus_input_context_reset = NULL;
+      p_ibus_input_context_set_cursor_location = NULL;
+      p_ibus_input_context_set_use_preedit = NULL;
+      p_ibus_input_context_set_surrounding_text = NULL;
+      p_ibus_input_context_set_capabilities = NULL;
+    }
+}
 
 /* ==============================================
    Callback handlers for IBus signal forwarding
@@ -102,7 +205,16 @@ gtk_im_bridge_context_init(GtkImBridgeContext *self)
 
   self->priv = gtk_im_bridge_context_get_instance_private(self);
   self->priv->id = ++COUNTER;
-  self->priv->ibus_context = ibus_setup_get_context();
+  
+  if (!load_libim_ibus())
+    {
+      LOG_MESSAGE("Failed to initialize libim-ibus bridge");
+      self->priv->ibus_context = NULL;
+    }
+  else
+    {
+      self->priv->ibus_context = p_ibus_setup_get_context();
+    }
   if (self->priv->ibus_context != NULL)
     {
       /* Take our own reference so finalize can unref safely without
@@ -200,7 +312,7 @@ gtk_im_bridge_context_filter_keypress(GtkIMContext *context,
       keyval = gdk_key_event_get_keyval(event);
       state = gdk_event_get_modifier_state(event);
 
-      result = ibus_input_context_process_key_event(
+      result = p_ibus_input_context_process_key_event(
         self->priv->ibus_context,
         keyval,
         0, /* keycode */
@@ -223,7 +335,7 @@ gtk_im_bridge_context_focus_in(GtkIMContext *context)
 
   if (self->priv->ibus_context != NULL)
     {
-      ibus_input_context_focus_in(self->priv->ibus_context);
+      p_ibus_input_context_focus_in(self->priv->ibus_context);
     }
 
   LOG_EXIT("focus_in", "");
@@ -238,7 +350,7 @@ gtk_im_bridge_context_focus_out(GtkIMContext *context)
 
   if (self->priv->ibus_context != NULL)
     {
-      ibus_input_context_focus_out(self->priv->ibus_context);
+      p_ibus_input_context_focus_out(self->priv->ibus_context);
     }
 
   LOG_EXIT("focus_out", "");
@@ -253,7 +365,7 @@ gtk_im_bridge_context_reset(GtkIMContext *context)
 
   if (self->priv->ibus_context != NULL)
     {
-      ibus_input_context_reset(self->priv->ibus_context);
+      p_ibus_input_context_reset(self->priv->ibus_context);
     }
 
   LOG_EXIT("reset", "");
@@ -309,7 +421,7 @@ gtk_im_bridge_context_set_cursor_location(GtkIMContext *context,
     {
       if (IBUS_IS_INPUT_CONTEXT(self->priv->ibus_context))
         {
-          ibus_input_context_set_cursor_location(
+          p_ibus_input_context_set_cursor_location(
             self->priv->ibus_context,
             area->x, area->y, area->width, area->height);
         }
@@ -332,7 +444,7 @@ gtk_im_bridge_context_set_use_preedit(GtkIMContext *context,
 
   if (self->priv->ibus_context != NULL)
     {
-      ibus_input_context_set_capabilities(
+      p_ibus_input_context_set_capabilities(
         self->priv->ibus_context,
         use_preedit ? IBUS_CAP_PREEDIT_TEXT : 0);
     }
@@ -395,7 +507,7 @@ gtk_im_bridge_context_set_surrounding(GtkIMContext *context,
   if (self->priv->ibus_context != NULL)
     {
       IBusText *surrounding_text = ibus_text_new_from_static_string(text ? text : "");
-      ibus_input_context_set_surrounding_text(
+      p_ibus_input_context_set_surrounding_text(
         self->priv->ibus_context,
         surrounding_text,
         cursor_index,
@@ -465,7 +577,7 @@ gtk_im_bridge_context_set_surrounding_with_selection(GtkIMContext *context,
   if (self->priv->ibus_context != NULL)
     {
       IBusText *surrounding_text = ibus_text_new_from_static_string(text ? text : "");
-      ibus_input_context_set_surrounding_text(
+      p_ibus_input_context_set_surrounding_text(
         self->priv->ibus_context,
         surrounding_text,
         cursor_index,

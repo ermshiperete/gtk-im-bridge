@@ -5,6 +5,9 @@
 #include "logging.h"
 #include "ibus-setup.h"
 
+/* Forward declaration of library unload function from im-bridge.c */
+extern void unload_libim_ibus(void);
+
 /* Module entry points that GTK looks for */
 
 G_MODULE_EXPORT void
@@ -23,6 +26,7 @@ im_module_exit(void)
   LOG_ENTER("im_module_exit", "");
 
   ibus_setup_cleanup();
+  unload_libim_ibus();
 
   LOG_EXIT("im_module_exit", "");
   LOG_SIGNAL("gtk-im-bridge-shutdown", "module exit complete");
