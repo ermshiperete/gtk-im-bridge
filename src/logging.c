@@ -23,6 +23,16 @@ logging_ensure_open(void)
   }
 }
 
+static void
+logging_flush()
+{
+  if (log_file != NULL) {
+    fflush(log_file);
+    fclose(log_file);
+    log_file = NULL;
+  }
+}
+
 static char *
 get_timestamp(void)
 {
@@ -31,6 +41,21 @@ get_timestamp(void)
   struct tm *timeinfo = localtime(&now);
   strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", timeinfo);
   return timestamp;
+}
+
+static int indent_level = 0;
+
+static void
+indent(int level)
+{
+  if (indent_level < 0) {
+    printf("WARNING: indent_level=%d\n", indent_level);
+    fprintf(log_file, "WARNING: indent_level=%d\n", indent_level);
+  }
+  for (int i = 0; i < level; i++) {
+    printf("  ");
+    fprintf(log_file, "  ");
+  }
 }
 
 void logging_init(void)
@@ -44,7 +69,7 @@ void logging_init(void)
     fprintf(log_file, "\n========================================\n");
     fprintf(log_file, "GTK-IM-Bridge initialized at %s\n", get_timestamp());
     fprintf(log_file, "========================================\n");
-    fflush(log_file);
+    logging_flush();
   }
 }
 
@@ -54,6 +79,7 @@ void logging_function_enter(const char *function_name, const char *params_format
   if (log_file)
   {
     va_list args;
+    indent(indent_level++);
     fprintf(log_file, "[%s] >> %s(", get_timestamp(), function_name);
     printf("[%s] >> %s(", get_timestamp(), function_name);
 
@@ -70,13 +96,14 @@ void logging_function_enter(const char *function_name, const char *params_format
 
     fprintf(log_file, ")\n");
     printf(")\n");
-    fflush(log_file);
+    logging_flush();
   }
 }
 
 void logging_function_exit(const char *function_name, const char *result_format, ...)
 {
   logging_ensure_open();
+  indent(--indent_level);
   if (log_file)
   {
     va_list args;
@@ -101,7 +128,7 @@ void logging_function_exit(const char *function_name, const char *result_format,
 
     fprintf(log_file, "\n");
     printf("\n");
-    fflush(log_file);
+    logging_flush();
   }
 }
 
@@ -111,6 +138,7 @@ void logging_signal(const char *signal_name, const char *details_format, ...)
   if (log_file)
   {
     va_list args;
+    indent(indent_level);
     fprintf(log_file, "[%s] SIGNAL: %s", get_timestamp(), signal_name);
     printf("[%s] SIGNAL: %s", get_timestamp(), signal_name);
 
@@ -129,7 +157,7 @@ void logging_signal(const char *signal_name, const char *details_format, ...)
 
     fprintf(log_file, "\n");
     printf("\n");
-    fflush(log_file);
+    logging_flush();
   }
 }
 
@@ -139,6 +167,7 @@ void logging_error(const char *format, ...)
   if (log_file)
   {
     va_list args;
+    indent(indent_level);
     fprintf(log_file, "[%s] ERROR: ", get_timestamp());
     printf("[%s] ERROR: ", get_timestamp());
     va_start(args, format);
@@ -150,7 +179,7 @@ void logging_error(const char *format, ...)
     va_end(args);
     fprintf(log_file, "\n");
     printf("\n");
-    fflush(log_file);
+    logging_flush();
   }
 }
 
@@ -160,6 +189,7 @@ void logging_message(const char *format, ...)
   if (log_file)
   {
     va_list args;
+    indent(indent_level);
     fprintf(log_file, "[%s] ", get_timestamp());
     printf("[%s] ", get_timestamp());
     va_start(args, format);
@@ -171,6 +201,6 @@ void logging_message(const char *format, ...)
     va_end(args);
     fprintf(log_file, "\n");
     printf("\n");
-    fflush(log_file);
+    logging_flush();
   }
 }

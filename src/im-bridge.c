@@ -1,54 +1,16 @@
 #include "im-bridge.h"
 #include "logging.h"
-#include "ibus-setup.h"
 #include <ibus.h>
 #include <dlfcn.h>
 
 typedef struct _GtkImBridgeContextPrivate GtkImBridgeContextPrivate;
 
-/* libim-ibus function pointers */
-static void *libim_ibus_handle = NULL;
-
-typedef IBusInputContext * (*ibus_setup_get_context_t)(void);
-typedef void (*ibus_setup_cleanup_t)(void);
-typedef gboolean (*ibus_input_context_process_key_event_t)(IBusInputContext *context,
-                                                         guint keyval,
-                                                         guint keycode,
-                                                         guint state);
-typedef void (*ibus_input_context_focus_in_t)(IBusInputContext *context);
-typedef void (*ibus_input_context_focus_out_t)(IBusInputContext *context);
-typedef void (*ibus_input_context_reset_t)(IBusInputContext *context);
-typedef void (*ibus_input_context_set_cursor_location_t)(IBusInputContext *context,
-                                                       gint x,
-                                                       gint y,
-                                                       gint width,
-                                                       gint height);
-typedef void (*ibus_input_context_set_use_preedit_t)(IBusInputContext *context,
-                                                    gboolean use_preedit);
-typedef void (*ibus_input_context_set_surrounding_text_t)(IBusInputContext *context,
-                                                        IBusText *text,
-                                                        guint cursor_pos,
-                                                        guint anchor_pos);
-typedef void (*ibus_input_context_set_capabilities_t)(IBusInputContext *context,
-                                                     guint caps);
-
-/* Function pointers */
-static ibus_setup_get_context_t p_ibus_setup_get_context = NULL;
-static ibus_setup_cleanup_t p_ibus_setup_cleanup = NULL;
-static ibus_input_context_process_key_event_t p_ibus_input_context_process_key_event = NULL;
-static ibus_input_context_focus_in_t p_ibus_input_context_focus_in = NULL;
-static ibus_input_context_focus_out_t p_ibus_input_context_focus_out = NULL;
-static ibus_input_context_reset_t p_ibus_input_context_reset = NULL;
-static ibus_input_context_set_cursor_location_t p_ibus_input_context_set_cursor_location = NULL;
-static ibus_input_context_set_use_preedit_t p_ibus_input_context_set_use_preedit = NULL;
-static ibus_input_context_set_surrounding_text_t p_ibus_input_context_set_surrounding_text = NULL;
-static ibus_input_context_set_capabilities_t p_ibus_input_context_set_capabilities = NULL;
 
 int COUNTER = 0;
 struct _GtkImBridgeContextPrivate
 {
   int id;
-  IBusInputContext *ibus_context;
+  GtkIMContext *ibus_context;
   GtkWidget *client_widget;
   gboolean preedit_visible;
   gchar* preedit_text;
@@ -66,131 +28,92 @@ G_DEFINE_FINAL_TYPE_WITH_PRIVATE(GtkImBridgeContext,
                                    GTK_TYPE_IM_CONTEXT)
 
 /* ==============================================
-   Dynamic library loading
-   ============================================== */
-
-static gboolean
-load_libim_ibus(void)
-{
-  if (libim_ibus_handle != NULL)
-    return TRUE;
-
-  libim_ibus_handle = dlopen("libim-ibus.so", RTLD_LAZY | RTLD_GLOBAL);
-  if (libim_ibus_handle == NULL)
-    {
-      LOG_MESSAGE("Failed to load libim-ibus.so: %s", dlerror());
-      return FALSE;
-    }
-
-  p_ibus_setup_get_context = dlsym(libim_ibus_handle, "ibus_setup_get_context");
-  p_ibus_setup_cleanup = dlsym(libim_ibus_handle, "ibus_setup_cleanup");
-  p_ibus_input_context_process_key_event = dlsym(libim_ibus_handle, "ibus_input_context_process_key_event");
-  p_ibus_input_context_focus_in = dlsym(libim_ibus_handle, "ibus_input_context_focus_in");
-  p_ibus_input_context_focus_out = dlsym(libim_ibus_handle, "ibus_input_context_focus_out");
-  p_ibus_input_context_reset = dlsym(libim_ibus_handle, "ibus_input_context_reset");
-  p_ibus_input_context_set_cursor_location = dlsym(libim_ibus_handle, "ibus_input_context_set_cursor_location");
-  p_ibus_input_context_set_use_preedit = dlsym(libim_ibus_handle, "ibus_input_context_set_use_preedit");
-  p_ibus_input_context_set_surrounding_text = dlsym(libim_ibus_handle, "ibus_input_context_set_surrounding_text");
-  p_ibus_input_context_set_capabilities = dlsym(libim_ibus_handle, "ibus_input_context_set_capabilities");
-
-  if (!p_ibus_setup_get_context || !p_ibus_setup_cleanup ||
-      !p_ibus_input_context_process_key_event || !p_ibus_input_context_focus_in ||
-      !p_ibus_input_context_focus_out || !p_ibus_input_context_reset ||
-      !p_ibus_input_context_set_cursor_location || !p_ibus_input_context_set_use_preedit ||
-      !p_ibus_input_context_set_surrounding_text || !p_ibus_input_context_set_capabilities)
-    {
-      LOG_MESSAGE("Failed to load required functions from libim-ibus.so");
-      dlclose(libim_ibus_handle);
-      libim_ibus_handle = NULL;
-      return FALSE;
-    }
-
-  LOG_MESSAGE("Successfully loaded libim-ibus.so");
-  return TRUE;
-}
-
-void
-unload_libim_ibus(void)
-{
-  if (libim_ibus_handle != NULL)
-    {
-      dlclose(libim_ibus_handle);
-      libim_ibus_handle = NULL;
-      p_ibus_setup_get_context = NULL;
-      p_ibus_setup_cleanup = NULL;
-      p_ibus_input_context_process_key_event = NULL;
-      p_ibus_input_context_focus_in = NULL;
-      p_ibus_input_context_focus_out = NULL;
-      p_ibus_input_context_reset = NULL;
-      p_ibus_input_context_set_cursor_location = NULL;
-      p_ibus_input_context_set_use_preedit = NULL;
-      p_ibus_input_context_set_surrounding_text = NULL;
-      p_ibus_input_context_set_capabilities = NULL;
-    }
-}
-
-/* ==============================================
    Callback handlers for IBus signal forwarding
    ============================================== */
 
 static void
-on_ibus_commit_text(IBusInputContext *ibus_ctx,
-                    IBusText *text,
-                    gpointer user_data)
+on_ibus_commit(GtkIMContext *ibus,
+               gchar *str,
+               gpointer user_data)
 {
   GtkImBridgeContext *self = GTK_IM_BRIDGE_CONTEXT(user_data);
-  const char *str = ibus_text_get_text(text);
+  LOG_ENTER(__FUNCTION__, "");
 
-  LOG_SIGNAL("ibus::commit-text", "text='%s'", str);
+  LOG_SIGNAL("ibus::commit", "text='%s'", str);
   g_signal_emit_by_name(self, "commit", str);
-}
-
-static void
-on_ibus_show_preedit_text(IBusInputContext *ibus_ctx,
-                      gpointer user_data)
-{
-  GtkImBridgeContext *self = GTK_IM_BRIDGE_CONTEXT(user_data);
-  LOG_SIGNAL("ibus::show-preedit-text", "");
-  self->priv->preedit_visible = TRUE;
-  g_signal_emit_by_name(self, "show-preedit-text");
-}
-
-static void
-on_ibus_update_preedit_text(IBusInputContext *ibus_ctx,
-                            IBusText *text,
-                            guint cursor_pos,
-                            gboolean visible,
-                            gpointer user_data)
-{
-  GtkImBridgeContext *self = GTK_IM_BRIDGE_CONTEXT(user_data);
-  self->priv->preedit_text = g_strdup(ibus_text_get_text(text));
-  self->priv->preedit_cursor_pos = cursor_pos;
-  LOG_SIGNAL("ibus::update-preedit-text", "text=%s cursor_pos=%u visible=%s",
-             self->priv->preedit_text, self->priv->preedit_cursor_pos, visible ? "TRUE" : "FALSE");
-  g_signal_emit_by_name(self, "update-preedit-text");
-}
-
-static void
-on_ibus_hide_preedit_text(IBusInputContext *ibus_ctx,
-                    gpointer user_data)
-{
-  GtkImBridgeContext *self = GTK_IM_BRIDGE_CONTEXT(user_data);
-  LOG_SIGNAL("ibus::hide-preedit-text", "");
-  self->priv->preedit_visible = FALSE;
-  g_signal_emit_by_name(self, "hide-preedit-text");
+  LOG_EXIT(__FUNCTION__, "");
 }
 
 static gboolean
-on_ibus_delete_surrounding_text(IBusInputContext *ibus_ctx,
+on_ibus_delete_surrounding(IBusInputContext *ibus_ctx,
                            gint offset,
-                           guint nchars,
+                           gint nchars,
                            gpointer user_data)
 {
+  LOG_ENTER(__FUNCTION__, "");
   GtkImBridgeContext *self = GTK_IM_BRIDGE_CONTEXT(user_data);
   gboolean result;
 
-  LOG_SIGNAL("ibus::delete-surrounding-text", "offset=%d nchars=%u", offset, nchars);
-  g_signal_emit_by_name(self, "delete-surrounding-text", offset, nchars, &result);
+  LOG_SIGNAL("ibus::delete-surrounding", "offset=%d nchars=%u", offset, nchars);
+  g_signal_emit_by_name(self, "delete-surrounding", offset, nchars, &result);
+  LOG_EXIT(__FUNCTION__, "%s", result ? "TRUE" : "FALSE");
+  return result;
+}
+
+#if GTK_CHECK_VERSION(4, 22, 0)
+static gboolean
+on_ibus_invalid_composition(GtkIMContext *ibus_ctx, gchar *str, gpointer user_data)
+{
+  LOG_ENTER(__FUNCTION__, "");
+  GtkImBridgeContext *self = GTK_IM_BRIDGE_CONTEXT(user_data);
+  gboolean result;
+
+  LOG_SIGNAL("ibus::invalid-composition", "str=%s", str);
+  g_signal_emit_by_name(self, "invalid-composition", str, &result);
+  LOG_EXIT(__FUNCTION__, "%s", result ? "TRUE" : "FALSE");
+  return result;
+}
+#endif
+
+static void on_ibus_preedit_changed(IBusInputContext *ibus_ctx,
+                                          gpointer user_data)
+{
+  LOG_ENTER(__FUNCTION__, "");
+  GtkImBridgeContext *self = GTK_IM_BRIDGE_CONTEXT(user_data);
+  LOG_SIGNAL("ibus::preedit-changed", "");
+  g_signal_emit_by_name(self, "preedit-changed");
+  LOG_EXIT(__FUNCTION__, "");
+}
+
+static void on_ibus_preedit_end(IBusInputContext *ibus_ctx,
+                                    gpointer user_data)
+{
+  LOG_ENTER(__FUNCTION__, "");
+  GtkImBridgeContext *self = GTK_IM_BRIDGE_CONTEXT(user_data);
+  LOG_SIGNAL("ibus::preedit-end", "");
+  g_signal_emit_by_name(self, "preedit-end");
+  LOG_EXIT(__FUNCTION__, "");
+}
+
+static void on_ibus_preedit_start(IBusInputContext *ibus_ctx,
+                                    gpointer user_data)
+{
+  LOG_ENTER(__FUNCTION__, "");
+  GtkImBridgeContext *self = GTK_IM_BRIDGE_CONTEXT(user_data);
+  LOG_SIGNAL("ibus::preedit-start", "");
+  g_signal_emit_by_name(self, "preedit-start");
+  LOG_EXIT(__FUNCTION__, "");
+}
+
+static void on_ibus_retrieve_surrounding(IBusInputContext *ibus_ctx,
+                                           gpointer user_data)
+{
+  LOG_ENTER(__FUNCTION__, "");
+  GtkImBridgeContext *self = GTK_IM_BRIDGE_CONTEXT(user_data);
+  gboolean result;
+  LOG_SIGNAL("ibus::retrieve-surrounding", "");
+  g_signal_emit_by_name(self, "retrieve-surrounding", &result);
+  LOG_EXIT(__FUNCTION__, "%s", result ? "TRUE" : "FALSE");
   return result;
 }
 
@@ -205,22 +128,8 @@ gtk_im_bridge_context_init(GtkImBridgeContext *self)
 
   self->priv = gtk_im_bridge_context_get_instance_private(self);
   self->priv->id = ++COUNTER;
-  
-  if (!load_libim_ibus())
-    {
-      LOG_MESSAGE("Failed to initialize libim-ibus bridge");
-      self->priv->ibus_context = NULL;
-    }
-  else
-    {
-      self->priv->ibus_context = p_ibus_setup_get_context();
-    }
-  if (self->priv->ibus_context != NULL)
-    {
-      /* Take our own reference so finalize can unref safely without
-       * invalidating the static context held by ibus-setup. */
-      g_object_ref(self->priv->ibus_context);
-    }
+
+  self->priv->ibus_context = NULL;
   self->priv->client_widget = NULL;
   self->priv->preedit_visible = FALSE;
   self->priv->preedit_text = NULL;
@@ -228,19 +137,37 @@ gtk_im_bridge_context_init(GtkImBridgeContext *self)
 
   LOG_MESSAGE("Created GtkImBridgeContext instance with id=%d", self->priv->id);
 
+  const char *context_id = "ibus";
+  GIOExtensionPoint *extensionPoint;
+  GIOExtension *extension;
+
+  extensionPoint = g_io_extension_point_lookup("gtk-im-module");
+  extension = g_io_extension_point_get_extension_by_name(extensionPoint, context_id);
+  if (extension)
+  {
+    GType type = g_io_extension_get_type(extension);
+    self->priv->ibus_context = g_object_new(type, NULL);
+  }
+
   if (self->priv->ibus_context != NULL)
     {
       /* Connect to IBus signals */
-      g_signal_connect(self->priv->ibus_context, "commit-text",
-                       G_CALLBACK(on_ibus_commit_text), self);
-      g_signal_connect(self->priv->ibus_context, "show-preedit-text",
-                       G_CALLBACK(on_ibus_show_preedit_text), self);
-      g_signal_connect(self->priv->ibus_context, "update-preedit-text",
-                       G_CALLBACK(on_ibus_update_preedit_text), self);
-      g_signal_connect(self->priv->ibus_context, "hide-preedit-text",
-                       G_CALLBACK(on_ibus_hide_preedit_text), self);
-      g_signal_connect(self->priv->ibus_context, "delete-surrounding-text",
-                       G_CALLBACK(on_ibus_delete_surrounding_text), self);
+      g_signal_connect(self->priv->ibus_context, "commit",
+        G_CALLBACK(on_ibus_commit), self);
+      g_signal_connect(self->priv->ibus_context, "delete-surrounding",
+        G_CALLBACK(on_ibus_delete_surrounding), self);
+#if GTK_CHECK_VERSION(4,22,0)
+      g_signal_connect(self->priv->ibus_context, "invalid-composition",
+        G_CALLBACK(on_ibus_invalid_composition), self);
+#endif
+      g_signal_connect(self->priv->ibus_context, "preedit-changed",
+        G_CALLBACK(on_ibus_preedit_changed), self);
+      g_signal_connect(self->priv->ibus_context, "preedit-end",
+        G_CALLBACK(on_ibus_preedit_end), self);
+      g_signal_connect(self->priv->ibus_context, "preedit-start",
+        G_CALLBACK(on_ibus_preedit_start), self);
+      g_signal_connect(self->priv->ibus_context, "retrieve-surrounding",
+        G_CALLBACK(on_ibus_retrieve_surrounding), self);
       LOG_SIGNAL("gtk-context-created", "ibus_context=%p", (void *)self->priv->ibus_context);
     }
 
@@ -283,14 +210,9 @@ gtk_im_bridge_context_set_client_widget(GtkIMContext *context,
 
   LOG_ENTER("set_client_widget", "widget=%p", (void *)widget);
 
-  if (self->priv->client_widget != NULL)
-    {
-      g_object_unref(self->priv->client_widget);
-    }
-
-  self->priv->client_widget = widget ? g_object_ref(widget) : NULL;
-
-  /* IBus doesn't have set_client_widget, but we log and cache it */
+  if (self->priv->ibus_context != NULL) {
+    gtk_im_context_set_client_widget(self->priv->ibus_context, widget);
+  }
 
   LOG_EXIT("set_client_widget", "");
 }
@@ -300,27 +222,15 @@ gtk_im_bridge_context_filter_keypress(GtkIMContext *context,
                                        GdkEvent *event)
 {
   GtkImBridgeContext *self = GTK_IM_BRIDGE_CONTEXT(context);
-  gboolean result = FALSE;
-  guint keyval = GDK_KEY_VoidSymbol;
-  GdkModifierType state = 0;
-
   LOG_ENTER("filter_keypress", "event=%p type=%d", (void *)event,
             event ? gdk_event_get_event_type(event) : 0);
 
+  gboolean result = FALSE;
+
   if (self->priv->ibus_context != NULL && event != NULL)
-    {
-      keyval = gdk_key_event_get_keyval(event);
-      state = gdk_event_get_modifier_state(event);
-
-      result = p_ibus_input_context_process_key_event(
-        self->priv->ibus_context,
-        keyval,
-        0, /* keycode */
-        state);
-
-      LOG_SIGNAL("keypress-process", "keyval=0x%x state=0x%x result=%s",
-                 keyval, state, result ? "TRUE" : "FALSE");
-    }
+  {
+    result = gtk_im_context_filter_keypress(self->priv->ibus_context, event);
+  }
 
   LOG_EXIT("filter_keypress", "result=%s", result ? "TRUE" : "FALSE");
   return result;
@@ -333,10 +243,9 @@ gtk_im_bridge_context_focus_in(GtkIMContext *context)
 
   LOG_ENTER("focus_in", "");
 
-  if (self->priv->ibus_context != NULL)
-    {
-      p_ibus_input_context_focus_in(self->priv->ibus_context);
-    }
+  if (self->priv->ibus_context != NULL) {
+    gtk_im_context_focus_in(self->priv->ibus_context);
+  }
 
   LOG_EXIT("focus_in", "");
 }
@@ -348,10 +257,9 @@ gtk_im_bridge_context_focus_out(GtkIMContext *context)
 
   LOG_ENTER("focus_out", "");
 
-  if (self->priv->ibus_context != NULL)
-    {
-      p_ibus_input_context_focus_out(self->priv->ibus_context);
-    }
+  if (self->priv->ibus_context != NULL) {
+    gtk_im_context_focus_out(self->priv->ibus_context);
+  }
 
   LOG_EXIT("focus_out", "");
 }
@@ -363,10 +271,9 @@ gtk_im_bridge_context_reset(GtkIMContext *context)
 
   LOG_ENTER("reset", "");
 
-  if (self->priv->ibus_context != NULL)
-    {
-      p_ibus_input_context_reset(self->priv->ibus_context);
-    }
+  if (self->priv->ibus_context != NULL) {
+    gtk_im_context_reset(self->priv->ibus_context);
+  }
 
   LOG_EXIT("reset", "");
 }
@@ -380,56 +287,9 @@ gtk_im_bridge_context_set_cursor_location(GtkIMContext *context,
   LOG_ENTER("set_cursor_location", "area={x=%d y=%d w=%d h=%d}",
             area->x, area->y, area->width, area->height);
 
-  if (self->priv->client_widget == NULL)
-  {
-    LOG_EXIT("set_cursor_location", "no client widget set, ignoring");
-    return;
+  if (self->priv->ibus_context != NULL) {
+    gtk_im_context_set_cursor_location(self->priv->ibus_context, area);
   }
-
-  // GtkWidget *root;
-  // GtkNative *native;
-  // graphene_point_t p;
-  // int tx = 0, ty = 0;
-  // double nx = 0., ny = 0.;
-  // root = GTK_WIDGET(gtk_widget_get_root(self->priv->client_widget));
-  // /* Translates the given point in client_window coordinates to coordinates
-  //    relative to root coordinate system. */
-  // if (!gtk_widget_compute_point(self->priv->client_widget,
-  //                               root,
-  //                               &GRAPHENE_POINT_INIT(area->x, area->y),
-  //                               &p))
-  // {
-  //   graphene_point_init(&p, area->x, area->y);
-  // }
-
-  // native = gtk_widget_get_native(self->priv->client_widget);
-  // /* Translates from the surface coordinates into the widget coordinates. */
-  // gtk_native_get_surface_transform(native, &nx, &ny);
-  // area->x = p.x + nx + tx;
-  // area->y = p.y + ny + ty;
-  // int scale_factor;
-  // scale_factor = gtk_widget_get_scale_factor(self->priv->client_widget);
-  // area->x *= scale_factor;
-  // area->y *= scale_factor;
-  // area->width *= scale_factor;
-  // area->height *= scale_factor;
-
-  // LOG_MESSAGE("Translated cursor location to root coordinates: x=%d y=%d, width=%d height=%d",
-  //             area->x, area->y, area->width, area->height);
-
-  if (self->priv->ibus_context != NULL)
-    {
-      if (IBUS_IS_INPUT_CONTEXT(self->priv->ibus_context))
-        {
-          p_ibus_input_context_set_cursor_location(
-            self->priv->ibus_context,
-            area->x, area->y, area->width, area->height);
-        }
-      else
-        {
-          LOG_ERROR("Invalid IBusInputContext: not IBUS_INPUT_CONTEXT, skipping cursor location");
-        }
-    }
 
   LOG_EXIT("set_cursor_location", "");
 }
@@ -442,12 +302,9 @@ gtk_im_bridge_context_set_use_preedit(GtkIMContext *context,
 
   LOG_ENTER("set_use_preedit", "use_preedit=%s", use_preedit ? "TRUE" : "FALSE");
 
-  if (self->priv->ibus_context != NULL)
-    {
-      p_ibus_input_context_set_capabilities(
-        self->priv->ibus_context,
-        use_preedit ? IBUS_CAP_PREEDIT_TEXT : 0);
-    }
+  if (self->priv->ibus_context != NULL) {
+    gtk_im_context_set_use_preedit(self->priv->ibus_context, use_preedit);
+  }
 
   LOG_EXIT("set_use_preedit", "");
 }
@@ -462,25 +319,9 @@ gtk_im_bridge_context_get_preedit_string(GtkIMContext *context,
 
   LOG_ENTER("get_preedit_string", "");
 
-  *str = g_strdup("");
-  *attrs = pango_attr_list_new();
-  if (cursor_pos) {
-    *cursor_pos = 0;
+  if (self->priv->ibus_context != NULL) {
+    gtk_im_context_get_preedit_string(self->priv->ibus_context, str, attrs, cursor_pos);
   }
-
-  if (self->priv->ibus_context != NULL)
-    {
-      if (self->priv->preedit_text != NULL)
-        {
-          g_free(*str);
-          *str = g_strdup(self->priv->preedit_text);
-          if (cursor_pos) {
-            *cursor_pos = self->priv->preedit_cursor_pos;
-          }
-
-          /* TODO: Convert IBus attributes to Pango attributes */
-        }
-    }
 
   if (cursor_pos) {
     LOG_EXIT("get_preedit_string", "str='%s' cursor_pos=%d", *str, *cursor_pos);
@@ -504,16 +345,9 @@ gtk_im_bridge_context_set_surrounding(GtkIMContext *context,
   LOG_ENTER("set_surrounding", "text='%s' len=%d cursor_index=%d",
             text_repr, len, cursor_index);
 
-  if (self->priv->ibus_context != NULL)
-    {
-      IBusText *surrounding_text = ibus_text_new_from_static_string(text ? text : "");
-      p_ibus_input_context_set_surrounding_text(
-        self->priv->ibus_context,
-        surrounding_text,
-        cursor_index,
-        cursor_index);
-      g_object_unref(surrounding_text);
-    }
+  if (self->priv->ibus_context != NULL) {
+    gtk_im_context_set_surrounding(self->priv->ibus_context, text, len, cursor_index);
+  }
 
   LOG_EXIT("set_surrounding", "");
 }
@@ -528,29 +362,9 @@ gtk_im_bridge_context_get_surrounding(GtkIMContext *context,
 
   LOG_ENTER("get_surrounding", "");
 
-  *text = g_strdup("");
-  *cursor_index = 0;
-
-  if (self->priv->ibus_context != NULL)
-    {
-      IBusText *surrounding_text = NULL;
-      guint surrounding_cursor_pos = 0;
-
-      g_object_get(self->priv->ibus_context,
-                   "surrounding-text", &surrounding_text,
-                   "surrounding-cursor-pos", &surrounding_cursor_pos,
-                   NULL);
-
-      if (surrounding_text != NULL)
-        {
-          const char *text_str = ibus_text_get_text(surrounding_text);
-          g_free(*text);
-          *text = g_strdup(text_str ? text_str : "");
-          *cursor_index = surrounding_cursor_pos;
-          g_object_unref(surrounding_text);
-          result = TRUE;
-        }
-    }
+  if (self->priv->ibus_context != NULL) {
+    result = gtk_im_context_get_surrounding(self->priv->ibus_context, text, cursor_index);
+  }
 
   LOG_EXIT("get_surrounding", "result=%s text='%.32s' cursor_index=%d",
            result ? "TRUE" : "FALSE", *text, *cursor_index);
@@ -574,16 +388,9 @@ gtk_im_bridge_context_set_surrounding_with_selection(GtkIMContext *context,
             "text='%s' len=%d cursor=%d anchor=%d",
             text_repr, len, cursor_index, anchor_index);
 
-  if (self->priv->ibus_context != NULL)
-    {
-      IBusText *surrounding_text = ibus_text_new_from_static_string(text ? text : "");
-      p_ibus_input_context_set_surrounding_text(
-        self->priv->ibus_context,
-        surrounding_text,
-        cursor_index,
-        anchor_index);
-      g_object_unref(surrounding_text);
-    }
+  if (self->priv->ibus_context != NULL) {
+    gtk_im_context_set_surrounding_with_selection(self->priv->ibus_context, text, len, cursor_index, anchor_index);
+  }
 
   LOG_EXIT("set_surrounding_with_selection", "");
 }
@@ -599,31 +406,9 @@ gtk_im_bridge_context_get_surrounding_with_selection(GtkIMContext *context,
 
   LOG_ENTER("get_surrounding_with_selection", "");
 
-  *text = g_strdup("");
-  *cursor_index = 0;
-  *anchor_index = 0;
-
-  if (self->priv->ibus_context != NULL)
-    {
-      IBusText *surrounding_text = NULL;
-      guint surrounding_cursor_pos = 0;
-
-      g_object_get(self->priv->ibus_context,
-                   "surrounding-text", &surrounding_text,
-                   "surrounding-cursor-pos", &surrounding_cursor_pos,
-                   NULL);
-
-      if (surrounding_text != NULL)
-        {
-          const char *text_str = ibus_text_get_text(surrounding_text);
-          g_free(*text);
-          *text = g_strdup(text_str ? text_str : "");
-          *cursor_index = surrounding_cursor_pos;
-          *anchor_index = surrounding_cursor_pos;
-          g_object_unref(surrounding_text);
-          result = TRUE;
-        }
-    }
+  if (self->priv->ibus_context != NULL) {
+    result = gtk_im_context_get_surrounding_with_selection(self->priv->ibus_context, text, cursor_index, anchor_index);
+  }
 
   LOG_EXIT("get_surrounding_with_selection",
            "result=%s text='%.32s' cursor=%d anchor=%d",
@@ -641,35 +426,28 @@ gtk_im_bridge_context_delete_surrounding(GtkIMContext *context,
 
   LOG_ENTER("delete_surrounding", "offset=%d n_chars=%d", offset, n_chars);
 
-  if (self->priv->ibus_context != NULL)
-    {
-      gboolean result;
-      g_signal_emit_by_name(self, "delete-surrounding", offset, n_chars, &result);
-      success = result;
-    }
+  if (self->priv->ibus_context != NULL) {
+    success = gtk_im_context_delete_surrounding(self->priv->ibus_context, offset, n_chars);
+  }
 
   LOG_EXIT("delete_surrounding", "success=%s", success ? "TRUE" : "FALSE");
   return success;
 }
 
-static void
-gtk_im_bridge_context_activate_osk(GtkIMContext *context)
-{
-  LOG_ENTER("activate_osk", "");
-  /* Not typically used on desktop, but we log it */
-  LOG_EXIT("activate_osk", "");
-}
-
 static gboolean
-gtk_im_bridge_context_activate_osk_with_event(GtkIMContext *context,
+gtk_im_bridge_context_activate_osk(GtkIMContext *context,
                                               GdkEvent *event)
 {
-  LOG_ENTER("activate_osk_with_event", "event=%p type=%d",
+  GtkImBridgeContext *self = GTK_IM_BRIDGE_CONTEXT(context);
+  gboolean result = FALSE;
+  LOG_ENTER("activate_osk", "event=%p type=%d",
             (void *)event,
             event ? gdk_event_get_event_type(event) : 0);
-  /* Not typically used on desktop, but we log it */
-  LOG_EXIT("activate_osk_with_event", "");
-  return FALSE;
+  if (self->priv->ibus_context != NULL) {
+    result = gtk_im_context_activate_osk(self->priv->ibus_context, event);
+  }
+  LOG_EXIT("activate_osk", "success=%s", result ? "TRUE" : "FALSE");
+  return result;
 }
 
 /* ==============================================
@@ -697,8 +475,7 @@ gtk_im_bridge_context_class_init(GtkImBridgeContextClass *klass)
   im_context_class->set_surrounding_with_selection = gtk_im_bridge_context_set_surrounding_with_selection;
   im_context_class->get_surrounding_with_selection = gtk_im_bridge_context_get_surrounding_with_selection;
   im_context_class->delete_surrounding = gtk_im_bridge_context_delete_surrounding;
-  im_context_class->activate_osk = gtk_im_bridge_context_activate_osk;
-  im_context_class->activate_osk_with_event = gtk_im_bridge_context_activate_osk_with_event;
+  im_context_class->activate_osk_with_event = gtk_im_bridge_context_activate_osk;
 }
 
 /* ==============================================

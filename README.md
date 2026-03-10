@@ -45,7 +45,7 @@ To run a GTK4 app with this IM module:
 ```bash
 GTK_IM_MODULE=im-bridge <gtk4-application>
 # Example:
-# GTK_IM_MODULE=im-bridge gtk4-demo
+# GTK_IM_MODULE=im-bridge builddir/simple-app/simple-app
 ```
 
 ## Logs

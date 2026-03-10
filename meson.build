@@ -23,14 +23,12 @@ endif
 # Source files
 sources = [
   'src/logging.c',
-  'src/ibus-setup.c',
   'src/im-bridge.c',
   'src/module.c',
 ]
 
 headers = [
   'src/logging.h',
-  'src/ibus-setup.h',
   'src/im-bridge.h',
 ]
 
@@ -55,7 +53,6 @@ test_runtime = executable(
   'tests/test_runtime.c',
   'src/im-bridge.c',
   'src/logging.c',
-  'src/ibus-setup.c',
   dependencies: [gtk_dep, ibus_dep, glib_dep, gobject_dep, gio_dep],
   include_directories: include_directories('src'),
   c_args: [

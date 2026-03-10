@@ -4,7 +4,7 @@
 int main(int argc, char **argv)
 {
   g_print("GTK-IM-Bridge test started\n");
-  
+
   // Don't call gtk_init() to avoid auto-loading system IM modules
   // which would cause type registration conflicts
 
@@ -25,7 +25,7 @@ int main(int argc, char **argv)
   int cursor = 0;
   gtk_im_context_get_preedit_string(ctx, &pre, &attrs, &cursor);
   g_print("Preedit string: '%s' (cursor at %d)\n", pre ? pre : "", cursor);
-  
+
   if (attrs)
     pango_attr_list_unref(attrs);
   if (pre)

@@ -3,10 +3,6 @@
 #include <gio/gio.h>
 #include "im-bridge.h"
 #include "logging.h"
-#include "ibus-setup.h"
-
-/* Forward declaration of library unload function from im-bridge.c */
-extern void unload_libim_ibus(void);
 
 /* Module entry points that GTK looks for */
 
@@ -24,9 +20,6 @@ G_MODULE_EXPORT void
 im_module_exit(void)
 {
   LOG_ENTER("im_module_exit", "");
-
-  ibus_setup_cleanup();
-  unload_libim_ibus();
 
   LOG_EXIT("im_module_exit", "");
   LOG_SIGNAL("gtk-im-bridge-shutdown", "module exit complete");
@@ -65,6 +58,7 @@ g_io_module_load(GIOModule *module)
                                  10);
 
   im_module_init(G_TYPE_MODULE(module));
+
 }
 
 G_MODULE_EXPORT void
