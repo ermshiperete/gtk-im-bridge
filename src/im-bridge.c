@@ -32,7 +32,7 @@ G_DEFINE_FINAL_TYPE_WITH_PRIVATE(GtkImBridgeContext,
    ============================================== */
 
 static void
-on_ibus_commit(GtkIMContext *ibus,
+on_commit_from_ibus(GtkIMContext *ibus,
                gchar *str,
                gpointer user_data)
 {
@@ -45,7 +45,7 @@ on_ibus_commit(GtkIMContext *ibus,
 }
 
 static gboolean
-on_ibus_delete_surrounding(IBusInputContext *ibus_ctx,
+on_delete_surrounding_from_ibus(IBusInputContext *ibus_ctx,
                            gint offset,
                            gint nchars,
                            gpointer user_data)
@@ -62,7 +62,7 @@ on_ibus_delete_surrounding(IBusInputContext *ibus_ctx,
 
 #if GTK_CHECK_VERSION(4, 22, 0)
 static gboolean
-on_ibus_invalid_composition(GtkIMContext *ibus_ctx, gchar *str, gpointer user_data)
+on_invalid_composition_from_ibus(GtkIMContext *ibus_ctx, gchar *str, gpointer user_data)
 {
   LOG_ENTER(__FUNCTION__, "");
   GtkImBridgeContext *self = GTK_IM_BRIDGE_CONTEXT(user_data);
@@ -75,7 +75,7 @@ on_ibus_invalid_composition(GtkIMContext *ibus_ctx, gchar *str, gpointer user_da
 }
 #endif
 
-static void on_ibus_preedit_changed(IBusInputContext *ibus_ctx,
+static void on_preedit_changed_from_ibus(IBusInputContext *ibus_ctx,
                                           gpointer user_data)
 {
   LOG_ENTER(__FUNCTION__, "");
@@ -85,7 +85,7 @@ static void on_ibus_preedit_changed(IBusInputContext *ibus_ctx,
   LOG_EXIT(__FUNCTION__, "");
 }
 
-static void on_ibus_preedit_end(IBusInputContext *ibus_ctx,
+static void on_preedit_end_from_ibus(IBusInputContext *ibus_ctx,
                                     gpointer user_data)
 {
   LOG_ENTER(__FUNCTION__, "");
@@ -95,7 +95,7 @@ static void on_ibus_preedit_end(IBusInputContext *ibus_ctx,
   LOG_EXIT(__FUNCTION__, "");
 }
 
-static void on_ibus_preedit_start(IBusInputContext *ibus_ctx,
+static void on_preedit_start_from_ibus(IBusInputContext *ibus_ctx,
                                     gpointer user_data)
 {
   LOG_ENTER(__FUNCTION__, "");
@@ -105,7 +105,7 @@ static void on_ibus_preedit_start(IBusInputContext *ibus_ctx,
   LOG_EXIT(__FUNCTION__, "");
 }
 
-static void on_ibus_retrieve_surrounding(IBusInputContext *ibus_ctx,
+static void on_retrieve_surrounding_from_ibus(IBusInputContext *ibus_ctx,
                                            gpointer user_data)
 {
   LOG_ENTER(__FUNCTION__, "");
@@ -153,21 +153,21 @@ gtk_im_bridge_context_init(GtkImBridgeContext *self)
     {
       /* Connect to IBus signals */
       g_signal_connect(self->priv->ibus_context, "commit",
-        G_CALLBACK(on_ibus_commit), self);
+        G_CALLBACK(on_commit_from_ibus), self);
       g_signal_connect(self->priv->ibus_context, "delete-surrounding",
-        G_CALLBACK(on_ibus_delete_surrounding), self);
+        G_CALLBACK(on_delete_surrounding_from_ibus), self);
 #if GTK_CHECK_VERSION(4,22,0)
       g_signal_connect(self->priv->ibus_context, "invalid-composition",
-        G_CALLBACK(on_ibus_invalid_composition), self);
+        G_CALLBACK(on_invalid_composition_from_ibus), self);
 #endif
       g_signal_connect(self->priv->ibus_context, "preedit-changed",
-        G_CALLBACK(on_ibus_preedit_changed), self);
+        G_CALLBACK(on_preedit_changed_from_ibus), self);
       g_signal_connect(self->priv->ibus_context, "preedit-end",
-        G_CALLBACK(on_ibus_preedit_end), self);
+        G_CALLBACK(on_preedit_end_from_ibus), self);
       g_signal_connect(self->priv->ibus_context, "preedit-start",
-        G_CALLBACK(on_ibus_preedit_start), self);
+        G_CALLBACK(on_preedit_start_from_ibus), self);
       g_signal_connect(self->priv->ibus_context, "retrieve-surrounding",
-        G_CALLBACK(on_ibus_retrieve_surrounding), self);
+        G_CALLBACK(on_retrieve_surrounding_from_ibus), self);
       LOG_SIGNAL("gtk-context-created", "ibus_context=%p", (void *)self->priv->ibus_context);
     }
 
