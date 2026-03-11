@@ -9,10 +9,9 @@
 G_MODULE_EXPORT void
 im_module_init(GTypeModule *module)
 {
-  LOG_ENTER("im_module_init", "module=%p", (void *)module);
-
   logging_init();
 
+  LOG_ENTER("im_module_init", "module=%p", (void *)module);
   LOG_EXIT("im_module_init", "");
 }
 

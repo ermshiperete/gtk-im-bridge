@@ -9,6 +9,13 @@ static FILE *log_file = NULL;
 static const char *log_file_path = "/tmp/gtk-im-bridge.log";
 
 static void
+logging_truncate()
+{
+  FILE *tmp = fopen(log_file_path, "w");
+  fclose(tmp);
+}
+
+static void
 logging_ensure_open(void)
 {
   if (log_file == NULL)
@@ -60,6 +67,7 @@ indent(int level)
 
 void logging_init(void)
 {
+  logging_truncate();
   logging_ensure_open();
   printf("\n========================================\n");
   printf("GTK-IM-Bridge initialized at %s\n", get_timestamp());
