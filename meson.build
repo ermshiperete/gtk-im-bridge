@@ -10,6 +10,7 @@ gmodule_dep = dependency('gmodule-2.0', version: '>=2.56')
 
 # Subdirectories
 subdir('simple-app')
+subdir('tools')
 
 # Get GTK module directory (install into GTK's versioned modules path)
 # e.g. /usr/lib/x86_64-linux-gnu/gtk-4.0/4.0.0/immodules

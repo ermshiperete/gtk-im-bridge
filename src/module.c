@@ -54,7 +54,7 @@ g_io_module_load(GIOModule *module)
   g_io_extension_point_implement("gtk-im-module",
                                  gtk_im_bridge_context_get_type(),
                                  "im-bridge",
-                                 10);
+                                 1000);
 
   im_module_init(G_TYPE_MODULE(module));
 
