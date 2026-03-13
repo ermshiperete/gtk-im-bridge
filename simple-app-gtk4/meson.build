@@ -1,6 +1,6 @@
 executable(
-  'simple-app',
-  'simple-app.c',
+  'simple-app-gtk4',
+  'simple-app-gtk4.c',
   dependencies: [gtk_dep],
   c_args: [
     '-g',

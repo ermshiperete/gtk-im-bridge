@@ -9,7 +9,7 @@ gio_dep = dependency('gio-2.0', version: '>=2.56')
 gmodule_dep = dependency('gmodule-2.0', version: '>=2.56')
 
 # Subdirectories
-subdir('simple-app')
+subdir('simple-app-gtk4')
 subdir('tools')
 
 # Get GTK module directory (install into GTK's versioned modules path)
