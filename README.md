@@ -62,6 +62,7 @@ meson install -C builddir/gtk3
 # or copy manually:
 # sudo cp builddir/gtk3/im-bridge.so /usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules/
 # sudo chmod 755 /usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules/im-bridge.so
+# sudo /usr/lib/x86_64-linux-gnu/libgtk-3-0t64/gtk-query-immodules-3.0 --update-cache
 ```
 
 ## Usage

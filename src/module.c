@@ -35,6 +35,28 @@ im_module_create(const char *context_id)
   return context;
 }
 
+#if !GTK_CHECK_VERSION(4, 0, 0)
+/* GTK3: Export im_module_list for module discovery */
+G_MODULE_EXPORT void
+im_module_list(const GtkIMContextInfo ***contexts, guint *n_contexts)
+{
+  static const GtkIMContextInfo im_bridge_info = {
+    "im-bridge",         /* id */
+    "IM Bridge",         /* name */
+    "gtk30",             /* domainname */
+    "gtk30",             /* domain_dirname */
+    "",                  /* default_locales */
+  };
+
+  static const GtkIMContextInfo *info_list[] = {
+    &im_bridge_info,
+  };
+
+  *contexts = info_list;
+  *n_contexts = G_N_ELEMENTS(info_list);
+}
+#endif
+
 /* GIO-style module entry points expected by GTK's module loader. */
 
 G_MODULE_EXPORT void

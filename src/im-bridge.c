@@ -246,6 +246,7 @@ _match_backend(const char *context_id)
   return TRUE;
 }
 
+#if GTK_CHECK_VERSION(4, 0, 0)
 static void
 gtk_im_bridge_context_init(GtkImBridgeContext *self)
 {
@@ -302,6 +303,33 @@ gtk_im_bridge_context_init(GtkImBridgeContext *self)
     GType type = g_io_extension_get_type(extension);
     self->priv->child_context = g_object_new(type, NULL);
   }
+}
+#else
+/* GTK3 version - use gtk_im_context_new directly */
+static void
+gtk_im_bridge_context_init(GtkImBridgeContext *self)
+{
+  LOG_ENTER("gtk_im_bridge_context_init", "self=%p", (void *)self);
+
+  self->priv = gtk_im_bridge_context_get_instance_private(self);
+  self->priv->id = ++COUNTER;
+
+  self->priv->child_context = NULL;
+
+  /* GTK3 doesn't have GIO extension point lookup, use simple approach */
+  const char *context_id = g_getenv("IM_BRIDGE_MODULE");
+  gchar how[100];
+  g_strlcpy(how, "env variable", 100);
+
+  if (!context_id) {
+    context_id = "ibus";
+    g_strlcpy(how, "default", 100);
+  }
+
+  self->priv->child_context = gtk_im_context_new(context_id);
+  LOG_MESSAGE("Created GtkImBridgeContext instance with id=%d and child %s (%s)", self->priv->id, context_id, how);
+}
+#endif
 
   if (self->priv->child_context != NULL) {
     /* Connect to child signals */
