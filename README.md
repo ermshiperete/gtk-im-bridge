@@ -55,18 +55,3 @@ All function entry/exit and signal forwarding are logged to:
 ```
 /tmp/gtk-im-bridge.log
 ```
-
-## Files added
-
-- `meson.build`, `meson_options.build`
-- `src/` — implementation and logging
-- `tests/test_runtime.c` — small dynamic loader test
-- `PLAN.md` — short implementation plan
-
-## Next steps
-
-- Install the module and test in real applications, or I can commit and install it for you.
-
-## License
-
-No license file included; add one if you plan to publish.
