@@ -154,51 +154,49 @@ gtk_im_bridge_context_init(GtkImBridgeContext *self)
 
   extensionPoint = g_io_extension_point_lookup("gtk-im-module");
   extension = g_io_extension_point_get_extension_by_name(extensionPoint, context_id);
-  if (extension)
-  {
+  if (extension) {
     GType type = g_io_extension_get_type(extension);
     self->priv->child_context = g_object_new(type, NULL);
   }
 
-  if (self->priv->child_context != NULL)
-    {
-      /* Connect to child signals */
-      g_signal_connect(self->priv->child_context, "commit",
-        G_CALLBACK(on_commit_from_child), self);
-      g_signal_connect(self->priv->child_context, "delete-surrounding",
-        G_CALLBACK(on_delete_surrounding_from_child), self);
-      g_signal_connect(self->priv->child_context, "preedit-changed",
-        G_CALLBACK(on_preedit_changed_from_child), self);
-      g_signal_connect(self->priv->child_context, "preedit-end",
-        G_CALLBACK(on_preedit_end_from_child), self);
-      g_signal_connect(self->priv->child_context, "preedit-start",
-        G_CALLBACK(on_preedit_start_from_child), self);
-      g_signal_connect(self->priv->child_context, "retrieve-surrounding",
-        G_CALLBACK(on_retrieve_surrounding_from_child), self);
-      self->priv->signal_commit_id =
-          g_signal_lookup("commit", GTK_IM_BRIDGE_TYPE_CONTEXT);
-      self->priv->signal_delete_surrounding_id =
-        g_signal_lookup("delete-surrounding", GTK_IM_BRIDGE_TYPE_CONTEXT);
-      self->priv->signal_preedit_changed_id =
-        g_signal_lookup("preedit-changed", GTK_IM_BRIDGE_TYPE_CONTEXT);
-      self->priv->signal_preedit_end_id =
-        g_signal_lookup("preedit-end", GTK_IM_BRIDGE_TYPE_CONTEXT);
-      self->priv->signal_preedit_start_id =
-        g_signal_lookup("preedit-start", GTK_IM_BRIDGE_TYPE_CONTEXT);
-      self->priv->signal_retrieve_surrounding_id =
-        g_signal_lookup("retrieve-surrounding", GTK_IM_BRIDGE_TYPE_CONTEXT);
+  if (self->priv->child_context != NULL) {
+    /* Connect to child signals */
+    g_signal_connect(self->priv->child_context, "commit",
+      G_CALLBACK(on_commit_from_child), self);
+    g_signal_connect(self->priv->child_context, "delete-surrounding",
+      G_CALLBACK(on_delete_surrounding_from_child), self);
+    g_signal_connect(self->priv->child_context, "preedit-changed",
+      G_CALLBACK(on_preedit_changed_from_child), self);
+    g_signal_connect(self->priv->child_context, "preedit-end",
+      G_CALLBACK(on_preedit_end_from_child), self);
+    g_signal_connect(self->priv->child_context, "preedit-start",
+      G_CALLBACK(on_preedit_start_from_child), self);
+    g_signal_connect(self->priv->child_context, "retrieve-surrounding",
+      G_CALLBACK(on_retrieve_surrounding_from_child), self);
+    self->priv->signal_commit_id =
+        g_signal_lookup("commit", GTK_IM_BRIDGE_TYPE_CONTEXT);
+    self->priv->signal_delete_surrounding_id =
+      g_signal_lookup("delete-surrounding", GTK_IM_BRIDGE_TYPE_CONTEXT);
+    self->priv->signal_preedit_changed_id =
+      g_signal_lookup("preedit-changed", GTK_IM_BRIDGE_TYPE_CONTEXT);
+    self->priv->signal_preedit_end_id =
+      g_signal_lookup("preedit-end", GTK_IM_BRIDGE_TYPE_CONTEXT);
+    self->priv->signal_preedit_start_id =
+      g_signal_lookup("preedit-start", GTK_IM_BRIDGE_TYPE_CONTEXT);
+    self->priv->signal_retrieve_surrounding_id =
+      g_signal_lookup("retrieve-surrounding", GTK_IM_BRIDGE_TYPE_CONTEXT);
 #if GTK_CHECK_VERSION(4, 22, 0)
-      g_signal_connect(self->priv->child_context, "invalid-composition",
-        G_CALLBACK(on_invalid_composition_from_child), self);
-      self->priv->signal_invalid_composition_id =
-        g_signal_lookup("invalid-composition", GTK_IM_BRIDGE_TYPE_CONTEXT);
+    g_signal_connect(self->priv->child_context, "invalid-composition",
+      G_CALLBACK(on_invalid_composition_from_child), self);
+    self->priv->signal_invalid_composition_id =
+      g_signal_lookup("invalid-composition", GTK_IM_BRIDGE_TYPE_CONTEXT);
 #endif
-      LOG_MESSAGE("gtk_im_bridge_context_init: child_context=%p, signal_commit_id=%d, signal_delete_surrounding_id=%d, signal_preeddit_changed_id=%d, signal_preedit_end_id=%d, signal_preedist_start=%d, signal_retrieve_surrounding_id=%d",
-                  (void *)self->priv->child_context, self->priv->signal_commit_id,
-                  self->priv->signal_delete_surrounding_id, self->priv->signal_preedit_changed_id,
-                  self->priv->signal_preedit_end_id, self->priv->signal_preedit_start_id,
-                  self->priv->signal_retrieve_surrounding_id);
-    }
+    LOG_MESSAGE("gtk_im_bridge_context_init: child_context=%p, signal_commit_id=%d, signal_delete_surrounding_id=%d, signal_preeddit_changed_id=%d, signal_preedit_end_id=%d, signal_preedist_start=%d, signal_retrieve_surrounding_id=%d",
+                (void *)self->priv->child_context, self->priv->signal_commit_id,
+                self->priv->signal_delete_surrounding_id, self->priv->signal_preedit_changed_id,
+                self->priv->signal_preedit_end_id, self->priv->signal_preedit_start_id,
+                self->priv->signal_retrieve_surrounding_id);
+  }
 
   LOG_EXIT("gtk_im_bridge_context_init", "");
 }
@@ -210,17 +208,15 @@ gtk_im_bridge_context_finalize(GObject *object)
 
   LOG_ENTER("gtk_im_bridge_context_finalize", "self=%p", (void *)self);
 
-  if (self->priv->client_widget != NULL)
-    {
-      g_object_unref(self->priv->client_widget);
-      self->priv->client_widget = NULL;
-    }
+  if (self->priv->client_widget != NULL) {
+    g_object_unref(self->priv->client_widget);
+    self->priv->client_widget = NULL;
+  }
 
-  if (self->priv->child_context != NULL)
-    {
-      g_object_unref(self->priv->child_context);
-      self->priv->child_context = NULL;
-    }
+  if (self->priv->child_context != NULL) {
+    g_object_unref(self->priv->child_context);
+    self->priv->child_context = NULL;
+  }
 
   LOG_EXIT("gtk_im_bridge_context_finalize", "");
 
@@ -256,8 +252,7 @@ gtk_im_bridge_context_filter_keypress(GtkIMContext *context,
 
   gboolean result = FALSE;
 
-  if (self->priv->child_context != NULL && event != NULL)
-  {
+  if (self->priv->child_context != NULL && event != NULL) {
     result = gtk_im_context_filter_keypress(self->priv->child_context, event);
   }
 
