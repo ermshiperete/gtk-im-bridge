@@ -3,6 +3,7 @@
 #include <dlfcn.h>
 #include <stdlib.h>
 
+#if GTK_CHECK_VERSION(4, 0, 0)
 #ifdef GDK_WINDOWING_X11
 #include <gdk/x11/gdkx.h>
 #endif
@@ -18,6 +19,23 @@
 #ifdef GDK_WINDOWING_WIN32
 #include <gdk/win32/gdkwin32.h>
 #endif
+#else // GTK_CHECK_VERSION(4,0,0)
+#ifdef GDK_WINDOWING_X11
+#include <gdk/gdkx.h>
+#endif
+
+#ifdef GDK_WINDOWING_WAYLAND
+#include <gdk/gdkwayland.h>
+#endif
+
+#ifdef GDK_WINDOWING_BROADWAY
+#include <gdk/gdkbroadway.h>
+#endif
+
+#ifdef GDK_WINDOWING_WIN32
+#include <gdk/gdkwin32.h>
+#endif
+#endif
 
 typedef struct _GtkImBridgeContextPrivate GtkImBridgeContextPrivate;
 
@@ -27,19 +45,16 @@ struct _GtkImBridgeContextPrivate
 {
   int id;
   GtkIMContext *child_context;
-  GtkWidget *client_widget;
-  gboolean preedit_visible;
-  gchar* preedit_text;
-  gint preedit_cursor_pos;
+
   gint signal_commit_id;
   gint signal_delete_surrounding_id;
-#if GTK_CHECK_VERSION(4, 22, 0)
-  gint signal_invalid_composition_id;
-#endif
   gint signal_preedit_changed_id;
   gint signal_preedit_end_id;
   gint signal_preedit_start_id;
   gint signal_retrieve_surrounding_id;
+#if GTK_CHECK_VERSION(4, 22, 0)
+  gint signal_invalid_composition_id;
+#endif
 };
 
 struct _GtkImBridgeContext
@@ -151,6 +166,7 @@ on_retrieve_surrounding_from_child(GtkIMContext *child_ctx,
 static gboolean
 _match_backend(const char *context_id)
 {
+#if GTK_CHECK_VERSION(4, 0, 0)
   if (g_strcmp0(context_id, "wayland") == 0)
   {
 #ifdef GDK_WINDOWING_WAYLAND
@@ -191,6 +207,42 @@ _match_backend(const char *context_id)
     return FALSE;
 #endif
 
+#else // GTK_CHECK_VERSION(4, 0, 0)
+#ifdef GDK_WINDOWING_WAYLAND
+  if (g_strcmp0(context_id, "wayland") == 0)
+  {
+    GdkDisplay *display = gdk_display_get_default();
+
+    return GDK_IS_WAYLAND_DISPLAY(display) &&
+           gdk_wayland_display_query_registry(display,
+                                              "zwp_text_input_manager_v3");
+  }
+  if (g_strcmp0(context_id, "waylandgtk") == 0)
+  {
+    GdkDisplay *display = gdk_display_get_default();
+
+    return GDK_IS_WAYLAND_DISPLAY(display) &&
+           gdk_wayland_display_query_registry(display,
+                                              "gtk_text_input_manager");
+  }
+#endif
+
+#ifdef GDK_WINDOWING_BROADWAY
+  if (g_strcmp0(context_id, "broadway") == 0)
+    return GDK_IS_BROADWAY_DISPLAY(gdk_display_get_default());
+#endif
+
+#ifdef GDK_WINDOWING_X11
+  if (g_strcmp0(context_id, "xim") == 0)
+    return GDK_IS_X11_DISPLAY(gdk_display_get_default());
+#endif
+
+#ifdef GDK_WINDOWING_WIN32
+  if (g_strcmp0(context_id, "ime") == 0)
+    return GDK_IS_WIN32_DISPLAY(gdk_display_get_default());
+#endif
+#endif // GTK_CHECK_VERSION(4, 0, 0)
+
   return TRUE;
 }
 
@@ -203,10 +255,6 @@ gtk_im_bridge_context_init(GtkImBridgeContext *self)
   self->priv->id = ++COUNTER;
 
   self->priv->child_context = NULL;
-  self->priv->client_widget = NULL;
-  self->priv->preedit_visible = FALSE;
-  self->priv->preedit_text = NULL;
-  self->priv->preedit_cursor_pos = 0;
 
   const char *context_id = g_getenv("IM_BRIDGE_MODULE");
   GIOExtensionPoint *extensionPoint;
@@ -304,11 +352,6 @@ gtk_im_bridge_context_finalize(GObject *object)
 
   LOG_ENTER("gtk_im_bridge_context_finalize", "self=%p", (void *)self);
 
-  if (self->priv->client_widget != NULL) {
-    g_object_unref(self->priv->client_widget);
-    self->priv->client_widget = NULL;
-  }
-
   if (self->priv->child_context != NULL) {
     g_object_unref(self->priv->child_context);
     self->priv->child_context = NULL;
@@ -323,6 +366,7 @@ gtk_im_bridge_context_finalize(GObject *object)
    Virtual method implementations
    ============================================== */
 
+#if GTK_CHECK_VERSION(4, 0, 0)
 static void
 gtk_im_bridge_context_set_client_widget(GtkIMContext *context,
                                         GtkWidget *widget)
@@ -337,7 +381,25 @@ gtk_im_bridge_context_set_client_widget(GtkIMContext *context,
 
   LOG_EXIT("set_client_widget", "");
 }
+#else
+/* GTK3 version using set_client_window */
+static void
+gtk_im_bridge_context_set_client_window(GtkIMContext *context,
+                                        GdkWindow *window)
+{
+  GtkImBridgeContext *self = GTK_IM_BRIDGE_CONTEXT(context);
 
+  LOG_ENTER("set_client_window", "window=%p", (void *)window);
+
+  if (self->priv->child_context != NULL) {
+    gtk_im_context_set_client_window(self->priv->child_context, window);
+  }
+
+  LOG_EXIT("set_client_window", "");
+}
+#endif
+
+#if GTK_CHECK_VERSION(4, 0, 0)
 static gboolean
 gtk_im_bridge_context_filter_keypress(GtkIMContext *context,
                                        GdkEvent *event)
@@ -355,6 +417,26 @@ gtk_im_bridge_context_filter_keypress(GtkIMContext *context,
   LOG_EXIT("filter_keypress", "result=%s", result ? "TRUE" : "FALSE");
   return result;
 }
+#else
+/* GTK3 version with GdkEventKey */
+static gboolean
+gtk_im_bridge_context_filter_keypress(GtkIMContext *context,
+                                       GdkEventKey *event)
+{
+  GtkImBridgeContext *self = GTK_IM_BRIDGE_CONTEXT(context);
+  LOG_ENTER("filter_keypress", "event=%p type=%d", (void *)event,
+            event ? event->type : 0);
+
+  gboolean result = FALSE;
+
+  if (self->priv->child_context != NULL && event != NULL) {
+    result = gtk_im_context_filter_keypress(self->priv->child_context, event);
+  }
+
+  LOG_EXIT("filter_keypress", "result=%s", result ? "TRUE" : "FALSE");
+  return result;
+}
+#endif
 
 static void
 gtk_im_bridge_context_focus_in(GtkIMContext *context)
@@ -451,6 +533,7 @@ gtk_im_bridge_context_get_preedit_string(GtkIMContext *context,
 }
 
 #if GTK_CHECK_VERSION(4, 1, 2)
+/* GTK4.1.2+ has set_surrounding_with_selection */
 static void
 gtk_im_bridge_context_set_surrounding_with_selection(GtkIMContext *context,
                                                      const char *text,
@@ -556,9 +639,10 @@ gtk_im_bridge_context_delete_surrounding(GtkIMContext *context,
   return success;
 }
 
+#if GTK_CHECK_VERSION(4, 0, 0)
 static gboolean
 gtk_im_bridge_context_activate_osk(GtkIMContext *context,
-                                              GdkEvent *event)
+                                               GdkEvent *event)
 {
   GtkImBridgeContext *self = GTK_IM_BRIDGE_CONTEXT(context);
   gboolean result = FALSE;
@@ -571,6 +655,7 @@ gtk_im_bridge_context_activate_osk(GtkIMContext *context,
   LOG_EXIT("activate_osk", "success=%s", result ? "TRUE" : "FALSE");
   return result;
 }
+#endif
 
 /* ==============================================
    Class initialization
@@ -584,7 +669,11 @@ gtk_im_bridge_context_class_init(GtkImBridgeContextClass *klass)
 
   gobject_class->finalize = gtk_im_bridge_context_finalize;
 
+#if GTK_CHECK_VERSION(4, 0, 0)
   im_context_class->set_client_widget = gtk_im_bridge_context_set_client_widget;
+#else
+  im_context_class->set_client_window = gtk_im_bridge_context_set_client_window;
+#endif
   im_context_class->filter_keypress = gtk_im_bridge_context_filter_keypress;
   im_context_class->focus_in = gtk_im_bridge_context_focus_in;
   im_context_class->focus_out = gtk_im_bridge_context_focus_out;
@@ -600,7 +689,9 @@ gtk_im_bridge_context_class_init(GtkImBridgeContextClass *klass)
   im_context_class->get_surrounding = gtk_im_bridge_context_get_surrounding;
 #endif
   im_context_class->delete_surrounding = gtk_im_bridge_context_delete_surrounding;
+#if GTK_CHECK_VERSION(4, 0, 0)
   im_context_class->activate_osk_with_event = gtk_im_bridge_context_activate_osk;
+#endif
 }
 
 /* ==============================================
