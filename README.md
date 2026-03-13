@@ -19,30 +19,28 @@ Supports both GTK3 and GTK4.
 #### For GTK4 (default):
 
 ```bash
-meson setup --prefix=/usr builddir
-meson compile -C builddir
+meson setup --prefix=/usr builddir/gtk4
+meson compile -C builddir/gtk4
 ```
 
 #### For GTK3:
 
 ```bash
-meson setup --prefix=/usr -Dgtk-version=3 builddir-gtk3
-meson compile -C builddir-gtk3
+meson setup --prefix=/usr -Dgtk-version=3 builddir/gtk3
+meson compile -C builddir/gtk3
 ```
 
 Auto-detection (tries GTK4 first, falls back to GTK3):
 
 ```bash
-meson setup --prefix=/usr builddir  # uses -Dgtk-version=auto (default)
+meson setup --prefix=/usr builddir/gtk4  # uses -Dgtk-version=auto (default)
 ```
 
 ### Run the included runtime test (loads built module dynamically)
 
 ```bash
-./builddir/test_runtime    # built test binary (if present)
-# or compile and run the test manually:
-# cc `pkg-config --cflags gtk4 ibus-1.0 gmodule-2.0` tests/test_runtime.c -o builddir/test_runtime `pkg-config --libs gtk4 ibus-1.0 gmodule-2.0`
-# ./builddir/test_runtime
+./builddir/gtk4/test_runtime    # GTK4 test binary
+./builddir/gtk3/test_runtime    # GTK3 test binary
 ```
 
 ## Install (optional)
@@ -52,17 +50,18 @@ meson setup --prefix=/usr builddir  # uses -Dgtk-version=auto (default)
 Install the module system-wide (may require sudo):
 
 ```bash
-meson install -C builddir
+meson install -C builddir/gtk4
 # or copy manually:
-# sudo cp builddir/libim-bridge.so /usr/lib/x86_64-linux-gnu/gtk-4.0/4.0.0/immodules/
+# sudo cp builddir/gtk4/libim-bridge.so /usr/lib/x86_64-linux-gnu/gtk-4.0/4.0.0/immodules/
 ```
 
 ### GTK3
 
 ```bash
-meson install -C builddir-gtk3
+meson install -C builddir/gtk3
 # or copy manually:
-# sudo cp builddir-gtk3/libim-bridge.so /usr/lib/x86_64-linux-gnu/gtk-3.0/immodules/
+# sudo cp builddir/gtk3/im-bridge.so /usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules/
+# sudo chmod 755 /usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules/im-bridge.so
 ```
 
 ## Usage
@@ -72,13 +71,15 @@ To run a GTK4 app with this IM module:
 ```bash
 GTK_IM_MODULE=im-bridge <gtk4-application>
 # Example:
-# GTK_IM_MODULE=im-bridge builddir/simple-app/simple-app
+# GTK_IM_MODULE=im-bridge builddir/gtk4/simple-app-gtk4/simple-app-gtk4
 ```
 
 To run a GTK3 app with this IM module:
 
 ```bash
 GTK_IM_MODULE=im-bridge <gtk3-application>
+# Example:
+# GTK_IM_MODULE=im-bridge builddir/gtk3/simple-app-gtk3/simple-app-gtk3
 ```
 
 ## Logs

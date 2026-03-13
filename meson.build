@@ -25,11 +25,13 @@ else
   endif
 endif
 
-# Subdirectories (simple-app-gtk4 is GTK4 only)
+# Subdirectories (version-specific demo apps)
 if gtk_version == '4'
   subdir('simple-app-gtk4')
+  subdir('tools')
+else
+  subdir('simple-app-gtk3')
 endif
-subdir('tools')
 
 # Source files (shared across GTK versions)
 shared_sources = [
@@ -91,16 +93,17 @@ else # GTK3
   if gtk3_libdir_opt != ''
     gtk3_libdir = gtk3_libdir_opt
   else
-    gtk3_libdir = join_paths(get_option('libdir'), 'gtk-3.0', 'immodules')
+    gtk3_libdir = join_paths(get_option('libdir'), 'gtk-3.0', '3.0.0', 'immodules')
   endif
 
-  # Build shared library as GTK3 IM module
+  # Build shared library as GTK3 IM module (without lib prefix)
   im_module = shared_library(
     'im-bridge',
     shared_sources,
     dependencies: [gtk_dep, ibus_dep, glib_dep, gobject_dep, gio_dep],
     install: true,
     install_dir: gtk3_libdir,
+    name_prefix: '',
     c_args: [
       '-g',
       '-Wall',
