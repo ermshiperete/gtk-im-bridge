@@ -1,7 +1,7 @@
-# Build list-gtk-im-modules utility
+# Build list-gtk4-im-modules utility
 executable(
-  'list-gtk-im-modules',
-  'list-gtk-im-modules.c',
+  'list-gtk4-im-modules',
+  'list-gtk4-im-modules.c',
   dependencies: [gtk_dep, glib_dep, gobject_dep, gio_dep],
   c_args: [
     '-g',

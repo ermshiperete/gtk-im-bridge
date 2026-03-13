@@ -1,1 +1,1 @@
-subdir('list-gtk-im-modules')
+subdir('list-gtk4-im-modules')

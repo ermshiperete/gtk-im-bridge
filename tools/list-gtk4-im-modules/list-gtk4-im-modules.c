@@ -17,7 +17,7 @@ int main(int argc, char *argv[])
   GtkApplication *app;
 
   /* Initialize GTK by creating and running a minimal application */
-  app = gtk_application_new("com.example.list-gtk-im-modules", G_APPLICATION_DEFAULT_FLAGS);
+  app = gtk_application_new("com.example.list-gtk4-im-modules", G_APPLICATION_DEFAULT_FLAGS);
   g_signal_connect(app, "activate", G_CALLBACK(on_activate), NULL);
   g_application_run(G_APPLICATION(app), argc, argv);
   g_object_unref(app);
