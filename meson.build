@@ -48,6 +48,8 @@ im_module = shared_library(
   ],
 )
 
+message('im-bridge module will be installed to: ' + gtk_libdir)
+
 # Build test executable (without module.c to avoid GIO module loading)
 test_runtime = executable(
   'test_runtime',

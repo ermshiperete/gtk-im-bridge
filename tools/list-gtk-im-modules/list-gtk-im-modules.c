@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 static void
-on_activate(GtkApplication *app, gpointer user_data)
+on_activate(GtkApplication *app, gpointer)
 {
   /* Just activate to trigger module loading */
   g_application_quit(G_APPLICATION(app));
@@ -15,12 +15,11 @@ int main(int argc, char *argv[])
   GList *extensions;
   GList *iter;
   GtkApplication *app;
-  int status;
 
   /* Initialize GTK by creating and running a minimal application */
   app = gtk_application_new("com.example.list-gtk-im-modules", G_APPLICATION_DEFAULT_FLAGS);
   g_signal_connect(app, "activate", G_CALLBACK(on_activate), NULL);
-  status = g_application_run(G_APPLICATION(app), argc, argv);
+  g_application_run(G_APPLICATION(app), argc, argv);
   g_object_unref(app);
 
   /* Look up the gtk-im-module extension point */

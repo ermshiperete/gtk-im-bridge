@@ -15,7 +15,7 @@ interactions.
 ### Build
 
 ```bash
-meson setup builddir
+meson setup --prefix=/usr builddir
 meson compile -C builddir
 ```
 
