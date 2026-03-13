@@ -3,6 +3,22 @@
 #include <dlfcn.h>
 #include <stdlib.h>
 
+#ifdef GDK_WINDOWING_X11
+#include <gdk/x11/gdkx.h>
+#endif
+
+#ifdef GDK_WINDOWING_WAYLAND
+#include <gdk/wayland/gdkwayland.h>
+#endif
+
+#ifdef GDK_WINDOWING_BROADWAY
+#include <gdk/broadway/gdkbroadway.h>
+#endif
+
+#ifdef GDK_WINDOWING_WIN32
+#include <gdk/win32/gdkwin32.h>
+#endif
+
 typedef struct _GtkImBridgeContextPrivate GtkImBridgeContextPrivate;
 
 
@@ -131,6 +147,53 @@ on_retrieve_surrounding_from_child(GtkIMContext *child_ctx,
    GObject lifecycle methods
    ============================================== */
 
+// basically a copy of `match_backend` in https://github.com/GNOME/gtk/blob/1cabb42dc61ddfe11302efbf9889d664f97a0b2e/gtk/gtkimmodule.c
+static gboolean
+_match_backend(const char *context_id)
+{
+  if (g_strcmp0(context_id, "wayland") == 0)
+  {
+#ifdef GDK_WINDOWING_WAYLAND
+    GdkDisplay *display = gdk_display_get_default();
+    return GDK_IS_WAYLAND_DISPLAY(display) &&
+           gdk_wayland_display_query_registry(display,
+                                              "zwp_text_input_manager_v3");
+#else
+    return FALSE;
+#endif
+  }
+
+  if (g_strcmp0(context_id, "broadway") == 0)
+#ifdef GDK_WINDOWING_BROADWAY
+    return GDK_IS_BROADWAY_DISPLAY(gdk_display_get_default());
+#else
+    return FALSE;
+#endif
+
+  if (g_strcmp0(context_id, "ime") == 0)
+#ifdef GDK_WINDOWING_WIN32
+    return GDK_IS_WIN32_DISPLAY(gdk_display_get_default());
+#else
+    return FALSE;
+#endif
+
+  if (g_strcmp0(context_id, "quartz") == 0)
+#ifdef GDK_WINDOWING_MACOS
+    return GDK_IS_MACOS_DISPLAY(gdk_display_get_default());
+#else
+    return FALSE;
+#endif
+
+  if (g_strcmp0(context_id, "android") == 0)
+#ifdef GDK_WINDOWING_ANDROID
+    return GDK_IS_ANDROID_DISPLAY(gdk_display_get_default());
+#else
+    return FALSE;
+#endif
+
+  return TRUE;
+}
+
 static void
 gtk_im_bridge_context_init(GtkImBridgeContext *self)
 {
@@ -145,15 +208,48 @@ gtk_im_bridge_context_init(GtkImBridgeContext *self)
   self->priv->preedit_text = NULL;
   self->priv->preedit_cursor_pos = 0;
 
-  const char *env_module = g_getenv("IM_BRIDGE_MODULE");
-  const char *context_id = env_module ? env_module : "ibus";
-  LOG_MESSAGE("Created GtkImBridgeContext instance with id=%d and child %s", self->priv->id, context_id);
-
+  const char *context_id = g_getenv("IM_BRIDGE_MODULE");
   GIOExtensionPoint *extensionPoint;
-  GIOExtension *extension;
+  GIOExtension *extension = NULL;
+  gchar how[100];
+  g_strlcpy(how, "env variable", 100);
 
   extensionPoint = g_io_extension_point_lookup("gtk-im-module");
+
+  if (!context_id) {
+    /* Find the extension with highest priority (excluding im-bridge) */
+    GList *extensions = g_io_extension_point_get_extensions(extensionPoint);
+    int best_priority = G_MININT;
+    const char *best_context_id = NULL;
+
+    for (GList *l = extensions; l != NULL; l = l->next) {
+      GIOExtension *ext = (GIOExtension *)l->data;
+      const char *ext_name = g_io_extension_get_name(ext);
+      int ext_priority = g_io_extension_get_priority(ext);
+
+      /* Skip im-bridge itself */
+      if (g_strcmp0(ext_name, "im-bridge") == 0)
+        continue;
+
+      if (ext_priority > best_priority && _match_backend(ext_name)) {
+        best_priority = ext_priority;
+        best_context_id = ext_name;
+      }
+    }
+
+    if (best_context_id == NULL) {
+      /* Fallback to ibus if no other suitable extension found */
+      context_id = "ibus";
+      g_strlcpy(how, "fallback", 100);
+    } else {
+      context_id = best_context_id;
+      g_snprintf(how, 100, "highest priority: %d", best_priority);
+    }
+  }
+
   extension = g_io_extension_point_get_extension_by_name(extensionPoint, context_id);
+  LOG_MESSAGE("Created GtkImBridgeContext instance with id=%d and child %s (%s)", self->priv->id, context_id, how);
+
   if (extension) {
     GType type = g_io_extension_get_type(extension);
     self->priv->child_context = g_object_new(type, NULL);
