@@ -2,6 +2,7 @@
 #include "logging.h"
 #include <dlfcn.h>
 #include <stdlib.h>
+#include <glib/gstdio.h>
 
 #if GTK_CHECK_VERSION(4, 0, 0)
 #ifdef GDK_WINDOWING_X11
@@ -35,6 +36,7 @@
 #ifdef GDK_WINDOWING_WIN32
 #include <gdk/gdkwin32.h>
 #endif
+#include <locale.h>
 #endif
 
 typedef struct _GtkImBridgeContextPrivate GtkImBridgeContextPrivate;
@@ -246,11 +248,195 @@ _match_backend(const char *context_id)
   return TRUE;
 }
 
+#if ! GTK_CHECK_VERSION(4, 0, 0)
+// Load all im-*.so files from the immodules directory
+static GSList* _load_modules() {
+  const char *immodules_dir = "/usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules/";
+  GDir *dir;
+  GError *error = NULL;
+  GSList *infos = NULL;
+
+  dir = g_dir_open(immodules_dir, 0, &error);
+  if (!dir) {
+    /* In case the directory doesn't exist, we allow returning NULL.
+     */
+    if (error) {
+      g_error_free(error);
+    }
+    return NULL;
+  }
+
+  const char *filename;
+  while ((filename = g_dir_read_name(dir)) != NULL) {
+    /* Look for files matching im-*.so pattern */
+    if (g_str_has_prefix(filename, "im-") && g_str_has_suffix(filename, ".so")) {
+      gchar *full_path = g_build_filename(immodules_dir, filename, NULL);
+      g_message("Found IM module: %s", full_path);
+      /* Store the full path in infos for later loading */
+      infos = g_slist_prepend(infos, full_path);
+    }
+  }
+
+  g_dir_close(dir);
+  return infos;
+}
+
+/* Match @locale against @against.
+ *
+ * 'en_US' against "en_US"       => 4
+ * 'en_US' against "en"          => 3
+ * 'en', "en_UK" against "en_US" => 2
+ *  all locales, against "*"     => 1
+ */
+static gint
+_match_locale(const gchar *locale,
+             const gchar *against,
+             size_t against_len)
+{
+  if (strcmp(against, "*") == 0)
+    return 1;
+
+  if (g_ascii_strcasecmp(locale, against) == 0)
+    return 4;
+
+  if (g_ascii_strncasecmp(locale, against, 2) == 0)
+    return (against_len == 2) ? 3 : 2;
+
+  return 0;
+}
+
+#define SIMPLE_ID "gtk-im-context-simple"
+#define NONE_ID "gtk-im-context-none"
+
+static const gchar *
+_get_immodule(gchar **context_ids, GSList *modules_list, gpointer *create_func)
+{
+  const gchar *context_id = NULL;
+  while (context_ids && *context_ids) {
+    if (g_strcmp0(*context_ids, SIMPLE_ID) == 0)
+      return SIMPLE_ID;
+    else if (g_strcmp0(*context_ids, NONE_ID) == 0)
+      return NONE_ID;
+    else if (g_strcmp0(*context_ids, "im-bridge") != 0) {
+      gboolean found = FALSE;
+
+      /* Iterate over modules_list and find *context_ids */
+      for (GSList *l = modules_list; l != NULL; l = l->next) {
+        gchar *module_path = (gchar *)l->data;
+        GModule *gmodule = g_module_open(module_path, G_MODULE_BIND_LAZY);
+
+        if (gmodule) {
+          gpointer list_func = NULL;
+          if (g_module_symbol(gmodule, "im_module_list", &list_func)) {
+            void (*im_module_list)(const GtkIMContextInfo ***, guint *) = (void (*)(const GtkIMContextInfo ***, guint *))list_func;
+            const GtkIMContextInfo **contexts;
+            guint n_contexts;
+            im_module_list(&contexts, &n_contexts);
+
+            for (guint i = 0; i < n_contexts; i++) {
+              if (g_strcmp0(contexts[i]->context_id, *context_ids) == 0) {
+                found = TRUE;
+                context_id = *context_ids;
+                if (!g_module_symbol(gmodule, "im_module_create", create_func)) {
+                  create_func = NULL;
+                }
+                break;
+              }
+            }
+          }
+          g_module_close(gmodule);
+        }
+
+        if (found)
+          return context_id;
+      }
+    }
+    context_ids++;
+  }
+
+  // find the first module that matches backend and locale
+  gchar *tmp_locale, *tmp;
+  tmp_locale = g_strdup(setlocale(LC_CTYPE, NULL));
+
+  /* Strip the locale code down to the essentials
+   */
+  tmp = strchr(tmp_locale, '.');
+  if (tmp)
+    *tmp = '\0';
+  tmp = strchr(tmp_locale, '@');
+  if (tmp)
+    *tmp = '\0';
+
+  GSList *tmp_list = modules_list;
+  gint best_goodness = 0;
+  while (tmp_list) {
+    gchar *module_path = (gchar *)tmp_list->data;
+    GModule *gmodule = g_module_open(module_path, G_MODULE_BIND_LAZY);
+
+    if (gmodule) {
+      gpointer list_func = NULL;
+      if (g_module_symbol(gmodule, "im_module_list", &list_func)) {
+        void (*im_module_list)(const GtkIMContextInfo ***, guint *) = (void (*)(const GtkIMContextInfo ***, guint *))list_func;
+        const GtkIMContextInfo **contexts;
+        guint n_contexts;
+        im_module_list(&contexts, &n_contexts);
+
+        for (guint i = 0; i < n_contexts; i++) {
+          if (!_match_backend(contexts[i]->context_id)) {
+            continue;
+          }
+
+          const gchar *p;
+          p = contexts[i]->default_locales;
+          while (p) {
+            const gchar *q = strchr(p, ':');
+            gint goodness = _match_locale(tmp_locale, p, q ? (size_t)(q - p) : strlen(p));
+
+            if (goodness > best_goodness) {
+              context_id = contexts[i]->context_id;
+              best_goodness = goodness;
+              if (!g_module_symbol(gmodule, "im_module_create", create_func)) {
+                create_func = NULL;
+              }
+            }
+
+            p = q ? q + 1 : NULL;
+          }
+        }
+      }
+      g_module_close(gmodule);
+    }
+    tmp_list = tmp_list->next;
+  }
+
+  g_free(tmp_locale);
+
+  return context_id;
+}
+
+static const gchar *
+_get_context_id(gpointer *create_func) {
+  gchar **immodules;
+  GSList *modules_list;
+
+  const gchar *envvar = g_getenv("IM_BRIDGE_MODULE");
+  gchar how[100];
+  g_strlcpy(how, "env variable", 100);
+  modules_list = _load_modules();
+
+  immodules = g_strsplit(envvar, ":", 0);
+  const char *context_id = _get_immodule(immodules, modules_list, create_func);
+  g_strfreev(immodules);
+  g_slist_free(modules_list);
+  return context_id;
+}
+#endif
+
 #if GTK_CHECK_VERSION(4, 0, 0)
 static void
-gtk_im_bridge_context_init(GtkImBridgeContext *self)
+_create_context_instance(GtkImBridgeContext *self)
 {
-  LOG_ENTER("gtk_im_bridge_context_init", "self=%p", (void *)self);
+  LOG_ENTER("_create_context_instance", "self=%p", (void *)self);
 
   self->priv = gtk_im_bridge_context_get_instance_private(self);
   self->priv->id = ++COUNTER;
@@ -303,33 +489,38 @@ gtk_im_bridge_context_init(GtkImBridgeContext *self)
     GType type = g_io_extension_get_type(extension);
     self->priv->child_context = g_object_new(type, NULL);
   }
+  LOG_EXIT("_create_context_instance", "");
 }
 #else
-/* GTK3 version - use gtk_im_context_new directly */
+/* GTK3 version */
 static void
-gtk_im_bridge_context_init(GtkImBridgeContext *self)
+_create_context_instance(GtkImBridgeContext *self)
 {
-  LOG_ENTER("gtk_im_bridge_context_init", "self=%p", (void *)self);
+  LOG_ENTER("_create_context_instance", "self=%p", (void *)self);
 
   self->priv = gtk_im_bridge_context_get_instance_private(self);
   self->priv->id = ++COUNTER;
 
   self->priv->child_context = NULL;
 
-  /* GTK3 doesn't have GIO extension point lookup, use simple approach */
-  const char *context_id = g_getenv("IM_BRIDGE_MODULE");
-  gchar how[100];
-  g_strlcpy(how, "env variable", 100);
-
-  if (!context_id) {
-    context_id = "ibus";
-    g_strlcpy(how, "default", 100);
+  gpointer create_func = NULL;
+  const char *context_id = _get_context_id(&create_func);
+  if (context_id) {
+    GtkIMContext *(*im_module_create)(const char *context_id) = (GtkIMContext * (*)(const char *context_id)) create_func;
+    self->priv->child_context = im_module_create(context_id);
+  } else {
+    LOG_ERROR("Can't find suitable context_id.");
+    return;
   }
-
-  self->priv->child_context = gtk_im_context_new(context_id);
-  LOG_MESSAGE("Created GtkImBridgeContext instance with id=%d and child %s (%s)", self->priv->id, context_id, how);
+  LOG_EXIT("_create_context_instance", "Created GtkImBridgeContext instance with id=%d and child %s", self->priv->id, context_id);
 }
 #endif
+
+static void
+gtk_im_bridge_context_init(GtkImBridgeContext *self)
+{
+  LOG_ENTER("gtk_im_bridge_context_init", "");
+  _create_context_instance(self);
 
   if (self->priv->child_context != NULL) {
     /* Connect to child signals */

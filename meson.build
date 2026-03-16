@@ -100,7 +100,7 @@ else # GTK3
   im_module = shared_library(
     'im-bridge',
     shared_sources,
-    dependencies: [gtk_dep, ibus_dep, glib_dep, gobject_dep, gio_dep],
+    dependencies: [gtk_dep, ibus_dep, glib_dep, gobject_dep, gio_dep, gmodule_dep],
     install: true,
     install_dir: gtk3_libdir,
     name_prefix: '',
@@ -120,7 +120,7 @@ else # GTK3
     'tests/test_runtime.c',
     'src/im-bridge.c',
     'src/logging.c',
-    dependencies: [gtk_dep, ibus_dep, glib_dep, gobject_dep, gio_dep],
+    dependencies: [gtk_dep, ibus_dep, glib_dep, gobject_dep, gio_dep, gmodule_dep],
     include_directories: include_directories('src'),
     c_args: [
       '-g',
