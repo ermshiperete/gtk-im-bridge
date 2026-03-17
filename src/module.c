@@ -43,9 +43,9 @@ im_module_list(const GtkIMContextInfo ***contexts, guint *n_contexts)
   static const GtkIMContextInfo im_bridge_info = {
     "im-bridge",         /* id */
     "IM Bridge",         /* name */
-    "gtk30",             /* domainname */
+    "keyman",             /* domainname */
     "gtk30",             /* domain_dirname */
-    "",                  /* default_locales */
+    "*",                  /* default_locales */
   };
 
   static const GtkIMContextInfo *info_list[] = {
@@ -85,8 +85,11 @@ g_io_module_load(GIOModule *module)
 G_MODULE_EXPORT void
 g_io_module_unload(GIOModule *module)
 {
+  GTypeModule * gtype_module = G_TYPE_MODULE(module);
+  LOG_ENTER(__FUNCTION__, "module=%p, use_count=%d", (void *)module, gtype_module->use_count);
   im_module_exit();
   g_type_module_unuse(G_TYPE_MODULE(module));
+  LOG_EXIT(__FUNCTION__, "");
 }
 
 G_MODULE_EXPORT char **

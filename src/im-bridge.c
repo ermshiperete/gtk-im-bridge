@@ -59,6 +59,7 @@ struct _GtkImBridgeContextPrivate
 #endif
 #if !GTK_CHECK_VERSION(4,0,0)
   GModule *im_module;
+  GTypeModule *im_module_wrapper;  /* Holds reference to ImModuleWrapper to keep it alive */
 #endif
 };
 
@@ -532,6 +533,7 @@ static gboolean
 im_module_wrapper_load(GTypeModule *module)
 {
   /* GModule is already loaded, nothing more to do */
+  LOG_MESSAGE("%s: module=%p, use_count=%d", __FUNCTION__, (void *)module, module->use_count);
   return TRUE;
 }
 
@@ -539,17 +541,20 @@ static void
 im_module_wrapper_unload(GTypeModule *module)
 {
   /* Don't unload the GModule here, it's managed separately */
+  LOG_MESSAGE("%s: module=%p, use_count=%d", __FUNCTION__, (void *)module, module->use_count);
 }
 
 static void
 im_module_wrapper_init(ImModuleWrapper *self)
 {
+  LOG_MESSAGE("%s: self=%p", __FUNCTION__, (void *)self);
   self->gmodule = NULL;
 }
 
 static void
 im_module_wrapper_class_init(ImModuleWrapperClass *klass)
 {
+  LOG_MESSAGE("%s: klass=%p", __FUNCTION__, (void *)klass);
   GTypeModuleClass *module_class = G_TYPE_MODULE_CLASS(klass);
 
   module_class->load = im_module_wrapper_load;
@@ -565,6 +570,7 @@ _create_context_instance(GtkImBridgeContext *self)
   self->priv->id = ++COUNTER;
 
   self->priv->child_context = NULL;
+  self->priv->im_module_wrapper = NULL;
 
   char *context_id = _get_context_id(self);
   if (context_id) {
@@ -590,6 +596,12 @@ _create_context_instance(GtkImBridgeContext *self)
 
     LOG_MESSAGE("Created ImModuleWrapper at %p for GModule %p", (void *)gtype_module, (void *)self->priv->im_module);
 
+    /* Store the wrapper to keep it alive for the lifetime of this context.
+     * We take ownership of the g_object_new() reference. */
+    self->priv->im_module_wrapper = gtype_module;
+    g_type_module_use(self->priv->im_module_wrapper);
+    LOG_MESSAGE("ImModuleWrapper use count: %d", self->priv->im_module_wrapper->use_count);
+
     /* Call im_module_init with the proper GTypeModule */
     void (*im_module_init)(GTypeModule *module) = (void (*)(GTypeModule *module))init_func;
     im_module_init(gtype_module);
@@ -598,9 +610,6 @@ _create_context_instance(GtkImBridgeContext *self)
     GtkIMContext *(*im_module_create)(const char *context_id) =
         (GtkIMContext * (*)(const char *context_id)) create_func;
     self->priv->child_context = im_module_create(context_id);
-
-    /* Clean up the wrapper */
-    g_object_unref(gtype_module);
 
     g_free(context_id);
   }
@@ -672,6 +681,17 @@ gtk_im_bridge_context_finalize(GObject *object)
     g_object_unref(self->priv->child_context);
     self->priv->child_context = NULL;
   }
+
+#if !GTK_CHECK_VERSION(4,0,0)
+  /* Note: We don't unref im_module_wrapper here. GTypeModule has special
+   * lifecycle management - once types are registered with it (which happens
+   * in im_module_init), the GTypeModule object must not be disposed.
+   * The wrapper will remain in memory for the lifetime of the process. */
+  if (self->priv->im_module_wrapper != NULL) {
+    g_type_module_unuse(self->priv->im_module_wrapper);
+  }
+  self->priv->im_module_wrapper = NULL;
+#endif
 
   LOG_EXIT("gtk_im_bridge_context_finalize", "");
 

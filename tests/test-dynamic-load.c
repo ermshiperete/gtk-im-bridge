@@ -139,8 +139,8 @@ int main(int argc, char *argv[])
   }
 
   /* Cleanup */
-  if (gtype_module)
-    g_object_unref(gtype_module);
+  /* Note: Don't unref gtype_module - GTypeModule has special lifecycle management.
+     Once types are registered with it, it shouldn't be disposed. */
   g_module_close(module);
 
   printf("\n=== Test completed ===\n");
