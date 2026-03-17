@@ -38,7 +38,8 @@ subdir('tests')
 # Source files (shared across GTK versions)
 shared_sources = [
   'src/logging.c',
-  'src/im-bridge.c',
+  # 'src/im-bridge.c',
+  'src/im-bridge-minimal.c',
   'src/module.c',
 ]
 
