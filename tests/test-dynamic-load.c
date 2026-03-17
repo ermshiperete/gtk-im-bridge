@@ -22,7 +22,6 @@ G_DEFINE_TYPE(TestTypeModule, test_type_module, G_TYPE_TYPE_MODULE)
 static gboolean
 test_type_module_load(GTypeModule *module)
 {
-  TestTypeModule *test_module = (TestTypeModule *)module;
   printf("test_type_module_load called\n");
   /* Module is already loaded, just return TRUE */
   return TRUE;
@@ -44,7 +43,7 @@ static void
 test_type_module_class_init(TestTypeModuleClass *klass)
 {
   GTypeModuleClass *module_class = G_TYPE_MODULE_CLASS(klass);
-  
+
   printf("TestTypeModule class init\n");
   module_class->load = test_type_module_load;
   module_class->unload = test_type_module_unload;

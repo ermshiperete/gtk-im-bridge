@@ -73,23 +73,6 @@ if gtk_version == '4'
   )
 
   message('im-bridge module (GTK4) will be installed to: ' + gtk_libdir)
-
-  # Build test executable (without module.c to avoid GIO module loading)
-  test_runtime = executable(
-    'test_runtime',
-    'tests/test_runtime.c',
-    'src/im-bridge.c',
-    'src/logging.c',
-    dependencies: [gtk_dep, ibus_dep, glib_dep, gobject_dep, gio_dep],
-    include_directories: include_directories('src'),
-    c_args: [
-      '-g',
-      '-Wall',
-      '-Wextra',
-      '-Wno-unused-parameter',
-      '-D_BUILD_TEST',
-    ],
-  )
 else # GTK3
   gtk3_libdir_opt = get_option('gtk_libdir')
   if gtk3_libdir_opt != ''
@@ -115,21 +98,4 @@ else # GTK3
   )
 
   message('im-bridge module (GTK3) will be installed to: ' + gtk3_libdir)
-
-  # Build test executable
-  test_runtime = executable(
-    'test_runtime',
-    'tests/test_runtime.c',
-    'src/im-bridge.c',
-    'src/logging.c',
-    dependencies: [gtk_dep, ibus_dep, glib_dep, gobject_dep, gio_dep, gmodule_dep],
-    include_directories: include_directories('src'),
-    c_args: [
-      '-g',
-      '-Wall',
-      '-Wextra',
-      '-Wno-unused-parameter',
-      '-D_BUILD_TEST',
-    ],
-  )
 endif

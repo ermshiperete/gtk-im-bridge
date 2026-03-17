@@ -513,6 +513,49 @@ _create_context_instance(GtkImBridgeContext *self)
 }
 #else
 /* GTK3 version */
+
+/* Minimal GTypeModule wrapper for loading IM modules */
+typedef struct {
+  GTypeModule parent;
+  GModule *gmodule;
+} ImModuleWrapper;
+
+typedef struct {
+  GTypeModuleClass parent_class;
+} ImModuleWrapperClass;
+
+static GType im_module_wrapper_get_type(void);
+
+G_DEFINE_TYPE(ImModuleWrapper, im_module_wrapper, G_TYPE_TYPE_MODULE)
+
+static gboolean
+im_module_wrapper_load(GTypeModule *module)
+{
+  /* GModule is already loaded, nothing more to do */
+  return TRUE;
+}
+
+static void
+im_module_wrapper_unload(GTypeModule *module)
+{
+  /* Don't unload the GModule here, it's managed separately */
+}
+
+static void
+im_module_wrapper_init(ImModuleWrapper *self)
+{
+  self->gmodule = NULL;
+}
+
+static void
+im_module_wrapper_class_init(ImModuleWrapperClass *klass)
+{
+  GTypeModuleClass *module_class = G_TYPE_MODULE_CLASS(klass);
+
+  module_class->load = im_module_wrapper_load;
+  module_class->unload = im_module_wrapper_unload;
+}
+
 static void
 _create_context_instance(GtkImBridgeContext *self)
 {
@@ -530,12 +573,35 @@ _create_context_instance(GtkImBridgeContext *self)
     if (!g_module_symbol(self->priv->im_module, "im_module_init", &init_func) ||
         !g_module_symbol(self->priv->im_module, "im_module_create", &create_func)) {
       LOG_ERROR("Error loading funcs: %s", g_module_error());
+      g_free(context_id);
       return;
     }
+
+    /* Create a proper GTypeModule wrapper for the loaded GModule */
+    GTypeModule *gtype_module = g_object_new(im_module_wrapper_get_type(), NULL);
+    if (!gtype_module) {
+      LOG_ERROR("Failed to create ImModuleWrapper");
+      g_free(context_id);
+      return;
+    }
+
+    ImModuleWrapper *wrapper = (ImModuleWrapper *)gtype_module;
+    wrapper->gmodule = self->priv->im_module;
+
+    LOG_MESSAGE("Created ImModuleWrapper at %p for GModule %p", (void *)gtype_module, (void *)self->priv->im_module);
+
+    /* Call im_module_init with the proper GTypeModule */
     void (*im_module_init)(GTypeModule *module) = (void (*)(GTypeModule *module))init_func;
-    im_module_init(G_TYPE_MODULE(self->priv->im_module));
-    GtkIMContext *(*im_module_create)(const char *context_id) = (GtkIMContext * (*)(const char *context_id)) create_func;
+    im_module_init(gtype_module);
+
+    /* Call im_module_create */
+    GtkIMContext *(*im_module_create)(const char *context_id) =
+        (GtkIMContext * (*)(const char *context_id)) create_func;
     self->priv->child_context = im_module_create(context_id);
+
+    /* Clean up the wrapper */
+    g_object_unref(gtype_module);
+
     g_free(context_id);
   }
   else
@@ -543,7 +609,7 @@ _create_context_instance(GtkImBridgeContext *self)
     LOG_ERROR("Can't find suitable context_id.");
     return;
   }
-  LOG_EXIT("_create_context_instance", "Created GtkImBridgeContext instance with id=%d and child %s", self->priv->id, context_id);
+  LOG_EXIT("_create_context_instance", "Created GtkImBridgeContext instance with id=%d", self->priv->id);
 }
 #endif
 
