@@ -59,7 +59,10 @@ indent(int level)
     printf("WARNING: indent_level=%d\n", indent_level);
     fprintf(log_file, "WARNING: indent_level=%d\n", indent_level);
   }
-  for (int i = 0; i < level; i++) {
+  printf("[%s] ", get_timestamp());
+  fprintf(log_file, "[%s] ", get_timestamp());
+  for (int i = 0; i < level; i++)
+  {
     printf("  ");
     fprintf(log_file, "  ");
   }
@@ -88,8 +91,8 @@ void logging_function_enter(const char *function_name, const char *params_format
   {
     va_list args;
     indent(indent_level++);
-    fprintf(log_file, "[%s] >> %s(", get_timestamp(), function_name);
-    printf("[%s] >> %s(", get_timestamp(), function_name);
+    fprintf(log_file, ">> %s(", function_name);
+    printf(">> %s(", function_name);
 
     if (params_format && strlen(params_format) > 0)
     {
@@ -115,8 +118,8 @@ void logging_function_exit(const char *function_name, const char *result_format,
   if (log_file)
   {
     va_list args;
-    fprintf(log_file, "[%s] << %s returns: ", get_timestamp(), function_name);
-    printf("[%s] << %s returns: ", get_timestamp(), function_name);
+    fprintf(log_file, "<< %s returns: ", function_name);
+    printf("<< %s returns: ", function_name);
 
     if (result_format && strlen(result_format) > 0)
     {
@@ -147,8 +150,8 @@ void logging_signal(const char *signal_name, const char *details_format, ...)
   {
     va_list args;
     indent(indent_level);
-    fprintf(log_file, "[%s] SIGNAL: %s", get_timestamp(), signal_name);
-    printf("[%s] SIGNAL: %s", get_timestamp(), signal_name);
+    fprintf(log_file, "SIGNAL: %s", signal_name);
+    printf("SIGNAL: %s", signal_name);
 
     if (details_format && strlen(details_format) > 0)
     {
@@ -176,8 +179,8 @@ void logging_error(const char *format, ...)
   {
     va_list args;
     indent(indent_level);
-    fprintf(log_file, "[%s] ERROR: ", get_timestamp());
-    printf("[%s] ERROR: ", get_timestamp());
+    fprintf(log_file, "ERROR: ");
+    printf("ERROR: ");
     va_start(args, format);
     va_list args_copy;
     va_copy(args_copy, args);
@@ -198,8 +201,6 @@ void logging_message(const char *format, ...)
   {
     va_list args;
     indent(indent_level);
-    fprintf(log_file, "[%s] ", get_timestamp());
-    printf("[%s] ", get_timestamp());
     va_start(args, format);
     va_list args_copy;
     va_copy(args_copy, args);

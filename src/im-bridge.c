@@ -57,6 +57,9 @@ struct _GtkImBridgeContextPrivate
 #if GTK_CHECK_VERSION(4, 22, 0)
   gint signal_invalid_composition_id;
 #endif
+#if !GTK_CHECK_VERSION(4,0,0)
+  GModule *im_module;
+#endif
 };
 
 struct _GtkImBridgeContext
@@ -293,6 +296,7 @@ _match_locale(const gchar *locale,
              const gchar *against,
              size_t against_len)
 {
+  LOG_MESSAGE("%s: Checking %s against %s (%d)", __FUNCTION__, locale, against, against_len);
   if (strcmp(against, "*") == 0)
     return 1;
 
@@ -308,18 +312,17 @@ _match_locale(const gchar *locale,
 #define SIMPLE_ID "gtk-im-context-simple"
 #define NONE_ID "gtk-im-context-none"
 
-static const gchar *
-_get_immodule(gchar **context_ids, GSList *modules_list, gpointer *create_func)
+static gchar *
+_get_immodule(GtkImBridgeContext * self, gchar * *context_ids, GSList *modules_list)
 {
-  const gchar *context_id = NULL;
+  LOG_ENTER(__FUNCTION__, "");
+  gchar *context_id = NULL;
   while (context_ids && *context_ids) {
     if (g_strcmp0(*context_ids, SIMPLE_ID) == 0)
       return SIMPLE_ID;
     else if (g_strcmp0(*context_ids, NONE_ID) == 0)
       return NONE_ID;
     else if (g_strcmp0(*context_ids, "im-bridge") != 0) {
-      gboolean found = FALSE;
-
       /* Iterate over modules_list and find *context_ids */
       for (GSList *l = modules_list; l != NULL; l = l->next) {
         gchar *module_path = (gchar *)l->data;
@@ -335,20 +338,15 @@ _get_immodule(gchar **context_ids, GSList *modules_list, gpointer *create_func)
 
             for (guint i = 0; i < n_contexts; i++) {
               if (g_strcmp0(contexts[i]->context_id, *context_ids) == 0) {
-                found = TRUE;
-                context_id = *context_ids;
-                if (!g_module_symbol(gmodule, "im_module_create", create_func)) {
-                  create_func = NULL;
-                }
-                break;
+                context_id = g_strdup(*context_ids);
+                self->priv->im_module = gmodule;
+                LOG_EXIT(__FUNCTION__, "found var; context_id=%s", context_id);
+                return context_id;
               }
             }
           }
           g_module_close(gmodule);
         }
-
-        if (found)
-          return context_id;
       }
     }
     context_ids++;
@@ -371,9 +369,11 @@ _get_immodule(gchar **context_ids, GSList *modules_list, gpointer *create_func)
   gint best_goodness = 0;
   while (tmp_list) {
     gchar *module_path = (gchar *)tmp_list->data;
+    LOG_MESSAGE("_get_immodule: checking %s", module_path);
     GModule *gmodule = g_module_open(module_path, G_MODULE_BIND_LAZY);
 
     if (gmodule) {
+      gboolean found = FALSE;
       gpointer list_func = NULL;
       if (g_module_symbol(gmodule, "im_module_list", &list_func)) {
         void (*im_module_list)(const GtkIMContextInfo ***, guint *) = (void (*)(const GtkIMContextInfo ***, guint *))list_func;
@@ -382,40 +382,56 @@ _get_immodule(gchar **context_ids, GSList *modules_list, gpointer *create_func)
         im_module_list(&contexts, &n_contexts);
 
         for (guint i = 0; i < n_contexts; i++) {
+          LOG_MESSAGE("_get_immodule: processing %s", contexts[i]->context_id);
+          if (g_strcmp0(contexts[i]->context_id, "im-bridge") == 0) {
+            LOG_MESSAGE("%s: skipping im-bridge", __FUNCTION__);
+            continue;
+          }
           if (!_match_backend(contexts[i]->context_id)) {
+            LOG_MESSAGE("%s: backend doesn't match", __FUNCTION__);
             continue;
           }
 
           const gchar *p;
           p = contexts[i]->default_locales;
+          LOG_MESSAGE("%s: default_locales: %s, locale: %s", __FUNCTION__, p, tmp_locale);
           while (p) {
             const gchar *q = strchr(p, ':');
             gint goodness = _match_locale(tmp_locale, p, q ? (size_t)(q - p) : strlen(p));
 
             if (goodness > best_goodness) {
-              context_id = contexts[i]->context_id;
-              best_goodness = goodness;
-              if (!g_module_symbol(gmodule, "im_module_create", create_func)) {
-                create_func = NULL;
+              LOG_MESSAGE("_get__immodule: goodness %d > best_goodness %d", goodness, best_goodness);
+              if (context_id) {
+                g_free(context_id);
               }
+              context_id = g_strdup(contexts[i]->context_id);
+              best_goodness = goodness;
+              if (self->priv->im_module) {
+                g_module_close(self->priv->im_module);
+              }
+              self->priv->im_module = gmodule;
+              found = TRUE;
             }
 
             p = q ? q + 1 : NULL;
           }
         }
       }
-      g_module_close(gmodule);
+      if (!found) {
+        g_module_close(gmodule);
+      }
     }
     tmp_list = tmp_list->next;
   }
 
   g_free(tmp_locale);
 
+  LOG_EXIT(__FUNCTION__, "default; context_id=%s", context_id);
   return context_id;
 }
 
-static const gchar *
-_get_context_id(gpointer *create_func) {
+static gchar *
+_get_context_id(GtkImBridgeContext *self) {
   gchar **immodules;
   GSList *modules_list;
 
@@ -424,8 +440,12 @@ _get_context_id(gpointer *create_func) {
   g_strlcpy(how, "env variable", 100);
   modules_list = _load_modules();
 
-  immodules = g_strsplit(envvar, ":", 0);
-  const char *context_id = _get_immodule(immodules, modules_list, create_func);
+  if (envvar) {
+    immodules = g_strsplit(envvar, ":", 0);
+  } else {
+    immodules = NULL;
+  }
+  char *context_id = _get_immodule(self, immodules, modules_list);
   g_strfreev(immodules);
   g_slist_free(modules_list);
   return context_id;
@@ -503,12 +523,23 @@ _create_context_instance(GtkImBridgeContext *self)
 
   self->priv->child_context = NULL;
 
-  gpointer create_func = NULL;
-  const char *context_id = _get_context_id(&create_func);
+  char *context_id = _get_context_id(self);
   if (context_id) {
+    gpointer init_func = NULL;
+    gpointer create_func = NULL;
+    if (!g_module_symbol(self->priv->im_module, "im_module_init", &init_func) ||
+        !g_module_symbol(self->priv->im_module, "im_module_create", &create_func)) {
+      LOG_ERROR("Error loading funcs: %s", g_module_error());
+      return;
+    }
+    void (*im_module_init)(GTypeModule *module) = (void (*)(GTypeModule *module))init_func;
+    im_module_init(G_TYPE_MODULE(self->priv->im_module));
     GtkIMContext *(*im_module_create)(const char *context_id) = (GtkIMContext * (*)(const char *context_id)) create_func;
     self->priv->child_context = im_module_create(context_id);
-  } else {
+    g_free(context_id);
+  }
+  else
+  {
     LOG_ERROR("Can't find suitable context_id.");
     return;
   }

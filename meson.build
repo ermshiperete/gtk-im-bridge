@@ -33,6 +33,8 @@ else
   subdir('simple-app-gtk3')
 endif
 
+subdir('tests')
+
 # Source files (shared across GTK versions)
 shared_sources = [
   'src/logging.c',
