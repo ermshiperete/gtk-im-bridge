@@ -1,2 +1,1 @@
 option('gtk_libdir', type: 'string', value: '', description: 'GTK module installation directory')
-option('gtk-version', type: 'combo', choices: ['auto', '3', '4'], value: 'auto', description: 'GTK version to build for (auto detects available)')

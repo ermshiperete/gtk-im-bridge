@@ -472,7 +472,7 @@ _create_context_instance(GtkImBridgeContext *self)
 
   extensionPoint = g_io_extension_point_lookup("gtk-im-module");
 
-  if (!context_id) {
+  if (!context_id && extensionPoint) {
     /* Find the extension with highest priority (excluding im-bridge) */
     GList *extensions = g_io_extension_point_get_extensions(extensionPoint);
     int best_priority = G_MININT;
@@ -503,12 +503,22 @@ _create_context_instance(GtkImBridgeContext *self)
     }
   }
 
-  extension = g_io_extension_point_get_extension_by_name(extensionPoint, context_id);
+  if (!context_id) {
+    /* Fallback to ibus if extension point not available */
+    context_id = "ibus";
+    g_strlcpy(how, "fallback (no extension point)", 100);
+  }
+
+  if (extensionPoint) {
+    extension = g_io_extension_point_get_extension_by_name(extensionPoint, context_id);
+  }
   LOG_MESSAGE("Created GtkImBridgeContext instance with id=%d and child %s (%s)", self->priv->id, context_id, how);
 
   if (extension) {
     GType type = g_io_extension_get_type(extension);
     self->priv->child_context = g_object_new(type, NULL);
+  } else if (!extensionPoint) {
+    LOG_MESSAGE("  Extension point not available, child context will be NULL");
   }
   LOG_EXIT("_create_context_instance", "");
 }
@@ -860,12 +870,17 @@ gtk_im_bridge_context_get_preedit_string(GtkIMContext *context,
 
   if (self->priv->child_context != NULL) {
     gtk_im_context_get_preedit_string(self->priv->child_context, str, attrs, cursor_pos);
+  } else {
+    /* Initialize output parameters when no child context */
+    if (str) *str = g_strdup("");
+    if (attrs) *attrs = pango_attr_list_new();
+    if (cursor_pos) *cursor_pos = 0;
   }
 
   if (cursor_pos) {
-    LOG_EXIT("get_preedit_string", "str='%s' cursor_pos=%d", *str, *cursor_pos);
+    LOG_EXIT("get_preedit_string", "str='%s' cursor_pos=%d", *str ? *str : "", *cursor_pos);
   } else {
-    LOG_EXIT("get_preedit_string", "str='%s', cursor_pos=NULL", *str);
+    LOG_EXIT("get_preedit_string", "str='%s', cursor_pos=NULL", *str ? *str : "");
   }
 }
 
