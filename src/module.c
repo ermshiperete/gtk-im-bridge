@@ -9,6 +9,7 @@
 G_MODULE_EXPORT void
 im_module_init(GTypeModule *module)
 {
+  g_type_module_use(G_TYPE_MODULE(module));
   logging_init();
 
   LOG_ENTER("im_module_init", "module=%p", (void *)module);
@@ -57,7 +58,8 @@ im_module_list(const GtkIMContextInfo ***contexts, guint *n_contexts)
 }
 #endif
 
-/* GIO-style module entry points expected by GTK's module loader. */
+#if GTK_CHECK_VERSION(4, 0, 0)
+/* GIO-style module entry points expected by GTK4's module loader. */
 
 G_MODULE_EXPORT void
 g_io_module_load(GIOModule *module)
@@ -79,7 +81,6 @@ g_io_module_load(GIOModule *module)
                                  1000);
 
   im_module_init(G_TYPE_MODULE(module));
-
 }
 
 G_MODULE_EXPORT void
@@ -98,3 +99,4 @@ g_io_module_query(void)
   static char *eps[] = { "gtk-im-module", NULL };
   return g_strdupv(eps);
 }
+#endif

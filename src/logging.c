@@ -1,8 +1,10 @@
-#include "logging.h"
+#include <gtk/gtk.h>
 #include <glib/gprintf.h>
 #include <time.h>
 #include <stdarg.h>
 #include <string.h>
+
+#include "logging.h"
 
 static FILE *log_file = NULL;
 
@@ -70,15 +72,20 @@ indent(int level)
 
 void logging_init(void)
 {
+#if GTK_CHECK_VERSION(4, 0, 0)
+  const gchar *gtk = "GTK4";
+#else
+  const gchar *gtk = "GTK3";
+#endif
   logging_truncate();
   logging_ensure_open();
   printf("\n========================================\n");
-  printf("GTK-IM-Bridge initialized at %s\n", get_timestamp());
+  printf("GTK-IM-Bridge for %s initialized at %s\n", gtk, get_timestamp());
   printf("========================================\n");
   if (log_file)
   {
     fprintf(log_file, "\n========================================\n");
-    fprintf(log_file, "GTK-IM-Bridge initialized at %s\n", get_timestamp());
+    fprintf(log_file, "GTK-IM-Bridge for %s initialized at %s\n", gtk, get_timestamp());
     fprintf(log_file, "========================================\n");
     logging_flush();
   }

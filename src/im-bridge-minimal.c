@@ -126,7 +126,7 @@ gtk_im_bridge_context_class_init(GtkImBridgeContextClass *klass)
   im_context_class->focus_in = gtk_im_bridge_context_focus_in;
   im_context_class->focus_out = gtk_im_bridge_context_focus_out;
   im_context_class->reset = gtk_im_bridge_context_reset;
-  // im_context_class->set_cursor_location = gtk_im_bridge_context_set_cursor_location;
+  im_context_class->set_cursor_location = gtk_im_bridge_context_set_cursor_location;
   im_context_class->set_use_preedit = gtk_im_bridge_context_set_use_preedit;
   im_context_class->set_surrounding = gtk_im_bridge_context_set_surrounding;
   im_context_class->get_surrounding = gtk_im_bridge_context_get_surrounding;

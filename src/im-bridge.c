@@ -574,6 +574,7 @@ _create_context_instance(GtkImBridgeContext *self)
 
   char *context_id = _get_context_id(self);
   if (context_id) {
+    LOG_MESSAGE("*** Loading IM module '%s' for context_id '%s'", self->priv->im_module ? g_module_name(self->priv->im_module) : "none", context_id);
     gpointer init_func = NULL;
     gpointer create_func = NULL;
     if (!g_module_symbol(self->priv->im_module, "im_module_init", &init_func) ||
