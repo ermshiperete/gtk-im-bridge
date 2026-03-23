@@ -98,10 +98,15 @@ on_delete_surrounding_from_child(GtkIMContext *child_ctx,
 {
   LOG_ENTER(__FUNCTION__, "");
   GtkImBridgeContext *self = GTK_IM_BRIDGE_CONTEXT(user_data);
+  if (GTK_IM_CONTEXT(self) == child_ctx) {
+    LOG_ERROR("Received delete-surrounding signal from self, ignoring to avoid infinite loop");
+    LOG_EXIT(__FUNCTION__, "FALSE");
+    return FALSE;
+  }
   gboolean result;
 
   LOG_SIGNAL("child::delete-surrounding", "offset=%d nchars=%u", offset, nchars);
-  g_signal_emit(self, self->priv->signal_delete_surrounding_id, 0, offset, nchars, &result);
+  result = gtk_im_context_delete_surrounding(GTK_IM_CONTEXT(self), offset, nchars);
   LOG_EXIT(__FUNCTION__, "%s", result ? "TRUE" : "FALSE");
   return result;
 }
