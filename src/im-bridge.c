@@ -59,7 +59,6 @@ struct _GtkImBridgeContextPrivate
 #endif
 #if !GTK_CHECK_VERSION(4,0,0)
   GModule *im_module;
-  GTypeModule *im_module_wrapper;  /* Holds reference to ImModuleWrapper to keep it alive */
 #endif
 };
 
@@ -530,6 +529,15 @@ _create_context_instance(GtkImBridgeContext *self)
 #else
 /* GTK3 version */
 
+typedef struct {
+  gchar *path;
+  GModule *gmodule;
+  GTypeModule *type_module;
+  GtkIMContext *(*im_module_create)(const char *context_id);
+} LoadedImModule;
+
+static GSList *loaded_im_modules = NULL;
+
 /* Minimal GTypeModule wrapper for loading IM modules */
 typedef struct {
   GTypeModule parent;
@@ -576,6 +584,78 @@ im_module_wrapper_class_init(ImModuleWrapperClass *klass)
   module_class->unload = im_module_wrapper_unload;
 }
 
+static LoadedImModule *
+find_loaded_im_module(const gchar *module_path)
+{
+  for (GSList *l = loaded_im_modules; l != NULL; l = l->next) {
+    LoadedImModule *loaded = l->data;
+
+    if (g_strcmp0(loaded->path, module_path) == 0)
+      return loaded;
+  }
+
+  return NULL;
+}
+
+static LoadedImModule *
+get_or_load_im_module(GtkImBridgeContext *self)
+{
+  LoadedImModule *loaded;
+  gpointer init_func = NULL;
+  gpointer create_func = NULL;
+  GTypeModule *gtype_module;
+  ImModuleWrapper *wrapper;
+  const gchar *module_path;
+
+  if (self->priv->im_module == NULL)
+    return NULL;
+
+  module_path = g_module_name(self->priv->im_module);
+  loaded = find_loaded_im_module(module_path);
+  if (loaded != NULL) {
+    LOG_MESSAGE("Reusing loaded IM module '%s'", module_path);
+    g_module_close(self->priv->im_module);
+    self->priv->im_module = NULL;
+    return loaded;
+  }
+
+  if (!g_module_symbol(self->priv->im_module, "im_module_init", &init_func) ||
+      !g_module_symbol(self->priv->im_module, "im_module_create", &create_func)) {
+    LOG_ERROR("Error loading funcs: %s", g_module_error());
+    g_module_close(self->priv->im_module);
+    self->priv->im_module = NULL;
+    return NULL;
+  }
+
+  gtype_module = g_object_new(im_module_wrapper_get_type(), NULL);
+  if (gtype_module == NULL) {
+    LOG_ERROR("Failed to create ImModuleWrapper");
+    g_module_close(self->priv->im_module);
+    self->priv->im_module = NULL;
+    return NULL;
+  }
+
+  wrapper = (ImModuleWrapper *)gtype_module;
+  wrapper->gmodule = self->priv->im_module;
+
+  LOG_MESSAGE("Created ImModuleWrapper at %p for GModule %p", (void *)gtype_module, (void *)self->priv->im_module);
+
+  g_type_module_use(gtype_module);
+  LOG_MESSAGE("ImModuleWrapper use count: %d", gtype_module->use_count);
+
+  ((void (*)(GTypeModule *module))init_func)(gtype_module);
+
+  loaded = g_new0(LoadedImModule, 1);
+  loaded->path = g_strdup(module_path);
+  loaded->gmodule = self->priv->im_module;
+  loaded->type_module = gtype_module;
+  loaded->im_module_create = (GtkIMContext * (*)(const char *context_id))create_func;
+  loaded_im_modules = g_slist_prepend(loaded_im_modules, loaded);
+
+  self->priv->im_module = NULL;
+  return loaded;
+}
+
 static void
 _create_context_instance(GtkImBridgeContext *self)
 {
@@ -585,47 +665,19 @@ _create_context_instance(GtkImBridgeContext *self)
   self->priv->id = ++COUNTER;
 
   self->priv->child_context = NULL;
-  self->priv->im_module_wrapper = NULL;
 
   char *context_id = _get_context_id(self);
   if (context_id) {
+    LoadedImModule *loaded;
+
     LOG_MESSAGE("*** Loading IM module '%s' for context_id '%s'", self->priv->im_module ? g_module_name(self->priv->im_module) : "none", context_id);
-    gpointer init_func = NULL;
-    gpointer create_func = NULL;
-    if (!g_module_symbol(self->priv->im_module, "im_module_init", &init_func) ||
-        !g_module_symbol(self->priv->im_module, "im_module_create", &create_func)) {
-      LOG_ERROR("Error loading funcs: %s", g_module_error());
+    loaded = get_or_load_im_module(self);
+    if (loaded == NULL) {
       g_free(context_id);
       return;
     }
 
-    /* Create a proper GTypeModule wrapper for the loaded GModule */
-    GTypeModule *gtype_module = g_object_new(im_module_wrapper_get_type(), NULL);
-    if (!gtype_module) {
-      LOG_ERROR("Failed to create ImModuleWrapper");
-      g_free(context_id);
-      return;
-    }
-
-    ImModuleWrapper *wrapper = (ImModuleWrapper *)gtype_module;
-    wrapper->gmodule = self->priv->im_module;
-
-    LOG_MESSAGE("Created ImModuleWrapper at %p for GModule %p", (void *)gtype_module, (void *)self->priv->im_module);
-
-    /* Store the wrapper to keep it alive for the lifetime of this context.
-     * We take ownership of the g_object_new() reference. */
-    self->priv->im_module_wrapper = gtype_module;
-    g_type_module_use(self->priv->im_module_wrapper);
-    LOG_MESSAGE("ImModuleWrapper use count: %d", self->priv->im_module_wrapper->use_count);
-
-    /* Call im_module_init with the proper GTypeModule */
-    void (*im_module_init)(GTypeModule *module) = (void (*)(GTypeModule *module))init_func;
-    im_module_init(gtype_module);
-
-    /* Call im_module_create */
-    GtkIMContext *(*im_module_create)(const char *context_id) =
-        (GtkIMContext * (*)(const char *context_id)) create_func;
-    self->priv->child_context = im_module_create(context_id);
+    self->priv->child_context = loaded->im_module_create(context_id);
 
     g_free(context_id);
   }
@@ -699,14 +751,10 @@ gtk_im_bridge_context_finalize(GObject *object)
   }
 
 #if !GTK_CHECK_VERSION(4,0,0)
-  /* Note: We don't unref im_module_wrapper here. GTypeModule has special
-   * lifecycle management - once types are registered with it (which happens
-   * in im_module_init), the GTypeModule object must not be disposed.
-   * The wrapper will remain in memory for the lifetime of the process. */
-  if (self->priv->im_module_wrapper != NULL) {
-    g_type_module_unuse(self->priv->im_module_wrapper);
+  if (self->priv->im_module != NULL) {
+    g_module_close(self->priv->im_module);
+    self->priv->im_module = NULL;
   }
-  self->priv->im_module_wrapper = NULL;
 #endif
 
   LOG_EXIT("gtk_im_bridge_context_finalize", "");

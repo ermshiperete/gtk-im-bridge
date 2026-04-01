@@ -6,8 +6,6 @@
 
 /* Module entry points that GTK looks for */
 
-static GtkIMContext *_context = NULL;
-
 G_MODULE_EXPORT void
 im_module_init(GTypeModule *module)
 {
@@ -23,9 +21,6 @@ im_module_exit(void)
 {
   LOG_ENTER("im_module_exit", "");
 
-  // g_object_unref(_context);
-  _context = NULL;
-
   LOG_EXIT("im_module_exit", "");
   LOG_SIGNAL("gtk-im-bridge-shutdown", "module exit complete");
 }
@@ -33,15 +28,14 @@ im_module_exit(void)
 G_MODULE_EXPORT GtkIMContext *
 im_module_create(const char *context_id)
 {
+  GtkIMContext *context;
+
   LOG_ENTER("im_module_create", "context_id='%s'", context_id ? context_id : "");
 
-  if (!_context) {
-    _context = gtk_im_bridge_context_new();
-    g_object_ref(_context);
-  }
+  context = gtk_im_bridge_context_new();
 
-  LOG_EXIT("im_module_create", "context=%p", (void *)_context);
-  return _context;
+  LOG_EXIT("im_module_create", "context=%p", (void *)context);
+  return context;
 }
 
 #if !GTK_CHECK_VERSION(4, 0, 0)
