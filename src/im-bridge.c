@@ -762,7 +762,7 @@ gtk_im_bridge_context_filter_keypress(GtkIMContext *context,
 
   gboolean result = FALSE;
 
-  if (self->priv->child_context != NULL && event != NULL) {
+  if (self->priv->child_context != NULL) {
     result = gtk_im_context_filter_keypress(self->priv->child_context, event);
   }
 
@@ -781,7 +781,7 @@ gtk_im_bridge_context_filter_keypress(GtkIMContext *context,
 
   gboolean result = FALSE;
 
-  if (self->priv->child_context != NULL && event != NULL) {
+  if (self->priv->child_context != NULL) {
     result = gtk_im_context_filter_keypress(self->priv->child_context, event);
   }
 

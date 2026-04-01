@@ -49,7 +49,7 @@ To run a app with this IM module:
 GTK_IM_MODULE=im-bridge <gtk-application>
 # Example:
 # GTK_IM_MODULE=im-bridge builddir/simple-app-gtk4/simple-app-gtk4
-# GTK_IM_MODULE=im-bridge builddir/simple-app-gtk3/simple-app-gtk3
+# GTK_IM_MODULE=im-bridge IM_BRIDGE_MODULE=wayland builddir/simple-app-gtk3/simple-app-gtk3
 ```
 
 
